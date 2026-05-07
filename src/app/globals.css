@@ -1,26 +1,255 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --brand-green: #1D9E75;
+  --brand-green-light: #e8f7f2;
+  --brand-green-dark: #168a63;
+  --brand-blue: #185FA5;
+  --brand-blue-light: #e8f1fb;
+  --bg: #F8F8F6;
+  --surface: #ffffff;
+  --border: #E8E8E4;
+  --border-hover: #1D9E75;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --danger: #e53e3e;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100dvh;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #ccc; }
+
+/* Hide scrollbar on horizontal scroll containers */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Card base */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 2px 12px rgba(29,158,117,0.08);
+}
+
+/* Badge */
+.badge-verified {
+  background: var(--brand-green-light);
+  color: var(--brand-green);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.badge-owned {
+  background: var(--brand-blue-light);
+  color: var(--brand-blue);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+/* Buttons */
+.btn-primary {
+  background: var(--brand-green);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 10px 20px;
+  transition: background 0.15s ease, transform 0.1s ease;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary:hover { background: var(--brand-green-dark); }
+.btn-primary:active { transform: scale(0.98); }
+
+.btn-outline {
+  background: transparent;
+  color: var(--brand-green);
+  border: 1.5px solid var(--brand-green);
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 10px 20px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-outline:hover { background: var(--brand-green-light); }
+
+/* Input */
+.input-base {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text-primary);
+  width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+.input-base:focus {
+  border-color: var(--brand-green);
+  box-shadow: 0 0 0 3px rgba(29,158,117,0.1);
+}
+.input-base::placeholder { color: var(--text-muted); }
+
+/* Category pill */
+.cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 24px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.cat-pill:hover, .cat-pill.active {
+  border-color: var(--brand-green);
+  color: var(--brand-green);
+  background: var(--brand-green-light);
+}
+
+/* Ad card image container */
+.ad-img {
+  aspect-ratio: 4/3;
+  background: #f0f0ed;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Price */
+.price {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 16px;
+  letter-spacing: -0.3px;
+}
+
+/* Page padding — bottom nav safe area on mobile */
+.page-content {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Overlay / sheet */
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 40;
+  animation: fadeIn 0.2s ease;
+}
+.sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  z-index: 50;
+  animation: slideUp 0.25s ease;
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes slideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+
+/* Step progress */
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s, width 0.2s;
+}
+.step-dot.active {
+  background: var(--brand-green);
+  width: 24px;
+  border-radius: 4px;
+}
+.step-dot.done { background: var(--brand-green); }
+
+/* Star rating */
+.star { color: #f5a623; font-size: 14px; }
+.star.empty { color: var(--border); }
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0ed 25%, #e8e8e4 50%, #f0f0ed 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* WhatsApp sticky CTA */
+.whatsapp-cta {
+  background: #25D366;
+  color: #fff;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s ease, transform 0.1s ease;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  width: 100%;
+}
+.whatsapp-cta:hover { background: #1ebe5a; }
+.whatsapp-cta:active { transform: scale(0.98); }
