@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
-import { ArrowLeft, Camera, ChevronRight, Check, X, Upload, AlertCircle, Smartphone, Car, Home, Tv, Sofa, Shirt, BookOpen, Baby, Wrench, PawPrint, Briefcase, Package } from "lucide-react";
+import { ArrowLeft, Camera, ChevronRight, Check, X, Upload, AlertCircle, Smartphone, Car, Home, Tv, Sofa, Shirt, BookOpen, Baby, Wrench, PawPrint, Briefcase, Package, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CONDITIONS } from "@/lib/mockData";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 const STEPS = ["Category", "Photos", "Ownership", "Details", "Review"];
 
@@ -42,6 +43,9 @@ export default function PostAdPage() {
   const [whatsappStep, setWhatsappStep] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [whatsappAdded, setWhatsappAdded] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [insertedAdId, setInsertedAdId] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>({
     category: "", subcategory: "", photos: [],
     ownershipDoc: "", title: "", description: "",
@@ -51,15 +55,68 @@ export default function PostAdPage() {
   function next() { setStep(s => Math.min(STEPS.length - 1, s + 1)); }
   function back() { setStep(s => Math.max(0, s - 1)); }
 
-  function handleSubmit() { setWhatsappStep(true); }
+  async function handleSubmit() {
+    setSubmitting(true);
+    setSubmitError("");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-  function handleWhatsappDone(added: boolean) {
+    if (!user) {
+      setSubmitError("You must be logged in to post an ad.");
+      setSubmitting(false);
+      return;
+    }
+
+    const { data: adData, error: adError } = await supabase
+      .from("ads")
+      .insert({
+        seller_id: user.id,
+        title: form.title,
+        description: form.description || null,
+        price: Number(form.price),
+        category: form.category,
+        condition: form.condition || null,
+        ownership_proof_url: form.ownershipDoc || null,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (adError || !adData) {
+      setSubmitError(adError?.message ?? "Failed to submit ad.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (form.photos.length > 0) {
+      await supabase.from("ad_photos").insert(
+        form.photos.map((url, i) => ({ ad_id: adData.id, url, order_index: i }))
+      );
+    }
+
+    setInsertedAdId(adData.id);
+    setSubmitting(false);
+    setWhatsappStep(true);
+  }
+
+  async function handleWhatsappDone(added: boolean, waNumber?: string) {
+    if (added && waNumber) {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("users").upsert({
+          id: user.id,
+          whatsapp_number: waNumber,
+          whatsapp_chat_only: true,
+        });
+      }
+    }
     setWhatsappAdded(added);
     setSubmitted(true);
   }
 
   if (whatsappStep && !submitted) {
-    return <StepWhatsapp onDone={handleWhatsappDone} />;
+    return <StepWhatsapp onDone={(added, wa) => handleWhatsappDone(added, wa)} />;
   }
 
   if (submitted) {
@@ -122,7 +179,7 @@ export default function PostAdPage() {
           {step === 1 && <StepPhotos form={form} setForm={setForm} onNext={next} />}
           {step === 2 && <StepOwnership form={form} setForm={setForm} onNext={next} />}
           {step === 3 && <StepDetails form={form} setForm={setForm} onNext={next} />}
-          {step === 4 && <StepReview form={form} onSubmit={handleSubmit} />}
+          {step === 4 && <StepReview form={form} onSubmit={handleSubmit} submitting={submitting} submitError={submitError} />}
         </div>
       </main>
 
@@ -362,7 +419,12 @@ function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: F
   );
 }
 
-function StepReview({ form, onSubmit }: { form: FormData; onSubmit: () => void }) {
+function StepReview({ form, onSubmit, submitting, submitError }: {
+  form: FormData;
+  onSubmit: () => void;
+  submitting: boolean;
+  submitError: string;
+}) {
   return (
     <div>
       <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Review Your Ad</h2>
@@ -397,15 +459,19 @@ function StepReview({ form, onSubmit }: { form: FormData; onSubmit: () => void }
         </p>
       </div>
 
-      <button onClick={onSubmit} className="btn-primary w-full justify-center py-3">
-        Submit for Review
-        <Check size={16} strokeWidth={2.5} />
+      {submitError && (
+        <p className="text-xs font-medium mb-3 text-center" style={{ color: "var(--danger)" }}>{submitError}</p>
+      )}
+
+      <button onClick={onSubmit} disabled={submitting} className="btn-primary w-full justify-center py-3 disabled:opacity-60">
+        {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.5} />}
+        {submitting ? "Submitting..." : "Submit for Review"}
       </button>
     </div>
   );
 }
 
-function StepWhatsapp({ onDone }: { onDone: (added: boolean) => void }) {
+function StepWhatsapp({ onDone }: { onDone: (added: boolean, waNumber?: string) => void }) {
   const [number, setNumber] = useState("");
   const [chatOnly, setChatOnly] = useState(true);
   const [error, setError] = useState("");
@@ -413,9 +479,8 @@ function StepWhatsapp({ onDone }: { onDone: (added: boolean) => void }) {
   const valid = /^03\d{9}$/.test(number.replace(/\s/g, ""));
 
   function save() {
-    const cleaned = number.replace(/\s/g, "");
     if (!valid) { setError("Enter valid Pakistani number (03XXXXXXXXX)"); return; }
-    onDone(true);
+    onDone(true, number.replace(/\s/g, ""));
   }
 
   return (

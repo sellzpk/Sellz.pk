@@ -1,25 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
 import { AdCard } from "@/components/AdCard";
+import type { Ad } from "@/components/AdCard";
 import { SearchBar } from "@/components/SearchBar";
 import { CategoryGrid } from "@/components/CategoryGrid";
 import {
   ShieldCheck, Ban, UserCheck,
   CreditCard, Camera, ClipboardCheck,
-  Inbox,
+  Inbox, Loader2,
 } from "lucide-react";
-import { MOCK_ADS, CATEGORY_TABS } from "@/lib/mockData";
+import { CATEGORY_TABS } from "@/lib/mockData";
 import { Footer, FooterMobile } from "@/components/Footer";
+import { createClient } from "@/lib/supabase/client";
+import { mapAdRow, AD_SELECT } from "@/lib/supabase/helpers";
 
 export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState("all");
+  const [ads, setAds] = useState<Ad[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = activeCategory === "all"
-    ? MOCK_ADS
-    : MOCK_ADS.filter(ad => ad.category === activeCategory);
+  useEffect(() => {
+    async function fetchAds() {
+      setLoading(true);
+      const supabase = createClient();
+      const query = supabase
+        .from("ads")
+        .select(AD_SELECT)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(60);
+
+      if (activeCategory !== "all") {
+        query.eq("category", activeCategory);
+      }
+
+      const { data, error } = await query;
+      if (!error && data) {
+        setAds(data.map(mapAdRow));
+      } else {
+        setAds([]);
+      }
+      setLoading(false);
+    }
+    fetchAds();
+  }, [activeCategory]);
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
@@ -69,9 +96,7 @@ export default function HomePage() {
 
           {/* Desktop: categories grid */}
           <section className="hidden md:block mb-8">
-            <h2 style={{ fontSize: 18, fontWeight: 500, color: "#1A1A1A", marginBottom: 16 }}>
-              Browse Categories
-            </h2>
+            <h2 style={{ fontSize: 18, fontWeight: 500, color: "#1A1A1A", marginBottom: 16 }}>Browse Categories</h2>
             <CategoryGrid compact />
           </section>
 
@@ -83,27 +108,40 @@ export default function HomePage() {
                   ? "Latest Listings"
                   : CATEGORY_TABS.find(c => c.slug === activeCategory)?.label}
               </h2>
-              <span className="text-sm text-[var(--text-muted)]">{filtered.length} ads</span>
+              {!loading && (
+                <span className="text-sm" style={{ color: "var(--text-muted)" }}>{ads.length} ads</span>
+              )}
             </div>
 
-            {filtered.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" style={{ alignItems: "stretch" }}>
-                {filtered.map(ad => (
-                  <AdCard key={ad.id} ad={ad} />
+            {loading ? (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="card overflow-hidden animate-pulse">
+                    <div style={{ height: 200, background: "#F0F0EE" }} />
+                    <div className="p-3 space-y-2">
+                      <div className="h-4 rounded" style={{ background: "#F0F0EE", width: "60%" }} />
+                      <div className="h-3 rounded" style={{ background: "#F0F0EE", width: "90%" }} />
+                      <div className="h-3 rounded" style={{ background: "#F0F0EE", width: "70%" }} />
+                    </div>
+                  </div>
                 ))}
+              </div>
+            ) : ads.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" style={{ alignItems: "stretch" }}>
+                {ads.map(ad => <AdCard key={ad.id} ad={ad} />)}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-[var(--brand-green-light)] flex items-center justify-center mb-4">
-                  <Inbox size={32} strokeWidth={1.5} className="text-[var(--brand-green)]" />
+                  <Inbox size={32} strokeWidth={1.5} style={{ color: "var(--brand-green)" }} />
                 </div>
-                <p className="text-base font-semibold text-[var(--text-primary)] mb-1">No listings yet</p>
-                <p className="text-sm text-[var(--text-muted)]">Be the first to post in this category</p>
+                <p className="text-base font-semibold mb-1" style={{ color: "var(--text-primary)" }}>No listings yet</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Be the first to post in this category</p>
               </div>
             )}
           </section>
 
-          {/* Why Sellz.pk — mobile only */}
+          {/* Why Sellz.pk */}
           <section className="mt-10 mb-4 md:hidden">
             <h2 style={{ fontSize: 16, fontWeight: 500, color: "#1A1A1A", marginBottom: 12 }}>Why Sellz.pk?</h2>
             <div className="grid grid-cols-1 gap-3">
@@ -141,8 +179,8 @@ function TrustCard({ icon, title, desc }: { icon: React.ReactNode; title: string
         {icon}
       </div>
       <div>
-        <p className="text-sm font-semibold text-[var(--text-primary)] mb-0.5">{title}</p>
-        <p className="text-xs text-[var(--text-muted)] leading-snug">{desc}</p>
+        <p className="text-sm font-semibold mb-0.5" style={{ color: "var(--text-primary)" }}>{title}</p>
+        <p className="text-xs leading-snug" style={{ color: "var(--text-muted)" }}>{desc}</p>
       </div>
     </div>
   );
