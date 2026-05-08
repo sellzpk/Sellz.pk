@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
@@ -8,13 +8,15 @@ import { BottomNav } from "@/components/BottomNav";
 import { BadgeVerified } from "@/components/BadgeVerified";
 import { AdCard } from "@/components/AdCard";
 import { ChatPanel } from "@/components/ChatPanel";
-import { MOCK_ADS } from "@/lib/mockData";
 import { Footer, FooterMobile } from "@/components/Footer";
+import { createClient } from "@/lib/supabase/client";
+import type { AdWithPhotos } from "@/lib/types";
 import {
   ChevronLeft, ChevronRight, MapPin, Clock,
   Share2, Flag, ArrowLeft, MessageCircle, ImageOff,
-  Lock, Phone,
+  Lock, Phone, Loader2,
 } from "lucide-react";
+import type { Ad } from "@/components/AdCard";
 
 const WaIcon = ({ size = 16, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg viewBox="0 0 24 24" fill={color} width={size} height={size}>
@@ -27,23 +29,133 @@ function formatWaDisplay(num: string) {
   return `+92 ${digits.slice(0, 3)} ${digits.slice(3)}`;
 }
 
+function formatPrice(p: number) {
+  if (p >= 100000) return "Rs " + (p / 100000).toFixed(p % 100000 === 0 ? 0 : 1) + " lac";
+  if (p >= 1000) return "Rs " + (p / 1000).toFixed(0) + "k";
+  return "Rs " + p.toLocaleString();
+}
+
+function relativeTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function SkeletonDetail() {
+  return (
+    <div className="max-w-4xl mx-auto animate-pulse">
+      <div className="px-4 py-3">
+        <div className="h-4 w-20 bg-gray-200 rounded" />
+      </div>
+      <div className="md:grid md:grid-cols-5 md:gap-6 md:px-4">
+        <div className="md:col-span-3">
+          <div className="bg-gray-200 md:rounded-xl" style={{ aspectRatio: "4/3" }} />
+          <div className="px-4 md:px-0 mt-4">
+            <div className="card p-4 space-y-3">
+              <div className="h-6 w-3/4 bg-gray-200 rounded" />
+              <div className="h-8 w-1/3 bg-gray-200 rounded" />
+              <div className="h-4 w-1/2 bg-gray-200 rounded" />
+            </div>
+          </div>
+        </div>
+        <div className="md:col-span-2 px-4 md:px-0 mt-4 md:mt-0">
+          <div className="card p-4 space-y-3">
+            <div className="h-11 w-full bg-gray-200 rounded-xl" />
+            <div className="h-11 w-full bg-gray-200 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdDetailPage() {
   const { id } = useParams();
-  const ad = MOCK_ADS.find(a => a.id === id) || MOCK_ADS[0];
+  const [ad, setAd] = useState<AdWithPhotos | null>(null);
+  const [similar, setSimilar] = useState<Ad[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentImg, setCurrentImg] = useState(0);
   const [reported, setReported] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
   const [numberRevealed, setNumberRevealed] = useState(false);
 
-  const similar = MOCK_ADS.filter(a => a.id !== ad.id && a.category === ad.category).slice(0, 4);
-  const hasWhatsapp = Boolean(ad.whatsapp);
+  useEffect(() => {
+    if (!id) return;
+    loadAd(Number(id));
+  }, [id]);
 
-  function formatPrice(p: number) {
-    if (p >= 100000) return "Rs " + (p / 100000).toFixed(p % 100000 === 0 ? 0 : 1) + " lac";
-    if (p >= 1000) return "Rs " + (p / 1000).toFixed(0) + "k";
-    return "Rs " + p.toLocaleString();
+  async function loadAd(adId: number) {
+    setLoading(true);
+    const supabase = createClient();
+
+    const { data } = await supabase
+      .from("ads")
+      .select("*, ad_photos(*), users(id, full_name, city, cnic_verified, whatsapp_number)")
+      .eq("id", adId)
+      .single();
+
+    if (data) {
+      setAd(data as AdWithPhotos);
+
+      const { data: simData } = await supabase
+        .from("ads")
+        .select("id, title, price, city, area, category, created_at, ad_photos(url)")
+        .eq("status", "active")
+        .eq("category", (data as AdWithPhotos).category)
+        .neq("id", adId)
+        .limit(4);
+
+      if (simData) {
+        setSimilar(simData.map(a => ({
+          id: String(a.id),
+          title: a.title,
+          price: a.price,
+          images: (a.ad_photos as { url: string }[]).map(p => p.url),
+          area: a.area ?? "",
+          city: a.city ?? "",
+          postedAt: relativeTime(a.created_at),
+          verified: false,
+          owned: false,
+          category: a.category,
+        })));
+      }
+    }
+    setLoading(false);
   }
+
+  if (loading) {
+    return (
+      <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
+        <Navbar />
+        <main className="flex-1 pb-32 md:pb-8">
+          <SkeletonDetail />
+        </main>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  if (!ad) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center" style={{ background: "var(--bg)" }}>
+        <p className="text-base font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Ad not found</p>
+        <Link href="/" className="text-sm" style={{ color: "var(--brand-green)" }}>Go home</Link>
+      </div>
+    );
+  }
+
+  const seller = ad.users;
+  const sellerName = seller?.full_name ?? "Seller";
+  const sellerCity = seller?.city ?? ad.city ?? "";
+  const sellerVerified = seller?.cnic_verified ?? false;
+  const waNumber = seller?.whatsapp_number ?? undefined;
+  const hasWhatsapp = Boolean(waNumber);
+  const images = ad.ad_photos.map(p => p.url);
 
   function handleViewNumber() {
     if (!chatStarted) { setChatOpen(true); return; }
@@ -56,7 +168,6 @@ export default function AdDetailPage() {
 
       <main className="flex-1 pb-32 md:pb-8">
         <div className="max-w-4xl mx-auto">
-          {/* Back nav */}
           <div className="px-4 py-3 flex items-center gap-2">
             <Link href="/" className="flex items-center gap-1.5 text-sm transition-colors hover:text-[var(--brand-green)]" style={{ color: "var(--text-secondary)" }}>
               <ArrowLeft size={16} strokeWidth={2} />
@@ -71,14 +182,14 @@ export default function AdDetailPage() {
             <div className="md:col-span-3">
               {/* Gallery */}
               <div className="relative bg-[#f0f0ed] md:rounded-xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
-                {ad.images[0] ? (
-                  <img src={ad.images[currentImg] || ad.images[0]} alt={ad.title} className="w-full h-full object-cover" />
+                {images[0] ? (
+                  <img src={images[currentImg] || images[0]} alt={ad.title} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ background: "#F5F5F3" }}>
                     <ImageOff size={40} strokeWidth={1.5} style={{ color: "#BABAB5" }} />
                   </div>
                 )}
-                {ad.images.length > 1 && (
+                {images.length > 1 && (
                   <>
                     <button
                       onClick={() => setCurrentImg(i => Math.max(0, i - 1))}
@@ -87,13 +198,13 @@ export default function AdDetailPage() {
                       <ChevronLeft size={18} strokeWidth={2} />
                     </button>
                     <button
-                      onClick={() => setCurrentImg(i => Math.min(ad.images.length - 1, i + 1))}
+                      onClick={() => setCurrentImg(i => Math.min(images.length - 1, i + 1))}
                       className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center shadow"
                     >
                       <ChevronRight size={18} strokeWidth={2} />
                     </button>
                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                      {ad.images.map((_, i) => (
+                      {images.map((_, i) => (
                         <button
                           key={i}
                           onClick={() => setCurrentImg(i)}
@@ -117,8 +228,7 @@ export default function AdDetailPage() {
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        {ad.verified && <BadgeVerified type="verified" />}
-                        {ad.owned && <BadgeVerified type="owned" />}
+                        {sellerVerified && <BadgeVerified type="verified" />}
                       </div>
                       <h1 className="text-xl font-bold leading-tight" style={{ color: "var(--text-primary)" }}>{ad.title}</h1>
                     </div>
@@ -130,20 +240,20 @@ export default function AdDetailPage() {
                   <div className="flex items-center gap-4 text-xs mb-4" style={{ color: "var(--text-muted)" }}>
                     <span className="flex items-center gap-1">
                       <MapPin size={12} strokeWidth={2} />
-                      {ad.area}, {ad.city}
+                      {ad.area ? `${ad.area}, ` : ""}{ad.city}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock size={12} strokeWidth={2} />
-                      {ad.postedAt}
+                      {relativeTime(ad.created_at)}
                     </span>
                   </div>
 
-                  <div className="border-t pt-4" style={{ borderColor: "var(--border)" }}>
-                    <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Description</p>
-                    <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                      Item is in the condition shown — all photos taken live via Sellz.pk camera. No hidden defects. Price is final. Serious buyers only. Available for inspection before purchase. Meet at a public location in {ad.city}. Contact on WhatsApp to confirm availability before visiting.
-                    </p>
-                  </div>
+                  {ad.description && (
+                    <div className="border-t pt-4" style={{ borderColor: "var(--border)" }}>
+                      <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Description</p>
+                      <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{ad.description}</p>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => setReported(!reported)}
@@ -169,17 +279,17 @@ export default function AdDetailPage() {
                   Send Message
                 </button>
 
-                {hasWhatsapp ? (
-                  numberRevealed && ad.whatsapp ? (
+                {hasWhatsapp && waNumber && (
+                  numberRevealed ? (
                     <a
-                      href={`https://wa.me/92${ad.whatsapp.replace(/^0/, "")}`}
+                      href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border font-medium text-sm transition-colors"
                       style={{ borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)" }}
                     >
                       <WaIcon size={16} color="var(--brand-green)" />
-                      {formatWaDisplay(ad.whatsapp)}
+                      {formatWaDisplay(waNumber)}
                       <span className="text-xs opacity-70">· Open in WhatsApp →</span>
                     </a>
                   ) : (
@@ -200,7 +310,7 @@ export default function AdDetailPage() {
                       )}
                     </button>
                   )
-                ) : null}
+                )}
               </div>
 
               {/* Seller card */}
@@ -211,12 +321,12 @@ export default function AdDetailPage() {
                     className="w-11 h-11 rounded-full flex items-center justify-center text-base font-black text-white"
                     style={{ background: "var(--brand-green)" }}
                   >
-                    A
+                    {sellerName[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>M. Usman Tariq</p>
-                      <BadgeVerified type="verified" />
+                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{sellerName}</p>
+                      {sellerVerified && <BadgeVerified type="verified" />}
                       {hasWhatsapp && (
                         <span
                           className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
@@ -227,19 +337,11 @@ export default function AdDetailPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{ad.city} · Member since Mar 2024</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{sellerCity}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 mb-3">
-                  {[1,2,3,4,5].map(i => (
-                    <svg key={i} width="14" height="14" viewBox="0 0 14 14" fill={i <= 4 ? "#f5a623" : "#E8E8E4"}>
-                      <path d="M7 1l1.6 3.3 3.6.5-2.6 2.5.6 3.6L7 9.3 3.8 10.9l.6-3.6L2 4.8l3.6-.5z"/>
-                    </svg>
-                  ))}
-                  <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>4.0 (12 reviews)</span>
-                </div>
                 <Link
-                  href="/profile/seller-1"
+                  href={`/profile/${seller?.id ?? ""}`}
                   className="block text-center text-sm font-medium hover:underline"
                   style={{ color: "var(--brand-green)" }}
                 >
@@ -285,10 +387,10 @@ export default function AdDetailPage() {
           Send Message
         </button>
 
-        {hasWhatsapp ? (
-          numberRevealed && ad.whatsapp ? (
+        {hasWhatsapp && waNumber ? (
+          numberRevealed ? (
             <a
-              href={`https://wa.me/92${ad.whatsapp.replace(/^0/, "")}`}
+              href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm transition-colors"
@@ -320,13 +422,15 @@ export default function AdDetailPage() {
       <ChatPanel
         isOpen={chatOpen}
         onClose={() => setChatOpen(false)}
-        sellerName="M. Usman Tariq"
-        sellerCity={ad.city}
+        sellerName={sellerName}
+        sellerCity={sellerCity}
         sellerHasWhatsapp={hasWhatsapp}
-        waNumber={ad.whatsapp}
+        waNumber={waNumber}
         numberRevealed={numberRevealed}
         onChatStarted={() => setChatStarted(true)}
         onNumberRevealed={() => setNumberRevealed(true)}
+        adId={ad.id}
+        sellerId={ad.seller_id}
       />
 
       <BottomNav />

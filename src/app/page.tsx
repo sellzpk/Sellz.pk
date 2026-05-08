@@ -12,7 +12,7 @@ import {
   CreditCard, Camera, ClipboardCheck,
   Inbox, Loader2,
 } from "lucide-react";
-import { CATEGORY_TABS } from "@/lib/mockData";
+import { CATEGORY_TABS } from "@/lib/categories";
 import { Footer, FooterMobile } from "@/components/Footer";
 import { createClient } from "@/lib/supabase/client";
 import { mapAdRow, AD_SELECT } from "@/lib/supabase/helpers";

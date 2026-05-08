@@ -1,45 +1,170 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle, XCircle, Clock, Users, FileText, Flag,
   Search, ChevronRight, Eye, AlertTriangle, MapPin, Shield,
-  Camera, CreditCard, ScanFace
+  Camera, CreditCard, ScanFace, Loader2, LogOut,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const TABS = ["Dashboard", "Ad Queue", "CNIC Queue", "Users", "Reports", "Location Requests"];
 
-const AD_QUEUE = [
-  { id: "q1", title: "iPhone 15 Pro Max 256GB", price: 385000, seller: "Abdul Rehman", city: "Karachi", time: "10 min ago", photos: 4, hasOwnership: true },
-  { id: "q2", title: "Toyota Corolla 2020", price: 4700000, seller: "Bilal Ahmed", city: "Lahore", time: "25 min ago", photos: 6, hasOwnership: true },
-  { id: "q3", title: "Dell XPS 15 Laptop", price: 420000, seller: "Sana Malik", city: "Islamabad", time: "1 hour ago", photos: 3, hasOwnership: false },
-  { id: "q4", title: "3 Bed Apartment Clifton", price: 22500000, seller: "Hassan Khan", city: "Karachi", time: "2 hours ago", photos: 8, hasOwnership: true },
-];
+type PendingAd = {
+  id: number;
+  title: string;
+  price: number;
+  city: string | null;
+  created_at: string;
+  ad_photos: { url: string }[];
+  users: { full_name: string | null } | null;
+};
 
-const CNIC_QUEUE = [
-  { id: "c1", name: "Fatima Shah", phone: "03001234567", city: "Karachi", matchScore: 97, time: "5 min ago" },
-  { id: "c2", name: "Usman Ali", phone: "03219876543", city: "Lahore", matchScore: 89, time: "30 min ago" },
-  { id: "c3", name: "Ayesha Noor", phone: "03451231234", city: "Rawalpindi", matchScore: 94, time: "1 hour ago" },
-];
+type CnicUser = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  city: string | null;
+  cnic_front_url: string | null;
+  cnic_back_url: string | null;
+  selfie_url: string | null;
+  created_at: string;
+};
 
-const REPORTS = [
-  { id: "r1", type: "Ad", description: "Fake photos — item not as described", reportedBy: "User #445", time: "15 min ago" },
-  { id: "r2", type: "User", description: "Suspected duplicate CNIC account", reportedBy: "System", time: "2 hours ago" },
-  { id: "r3", type: "Ad", description: "Price manipulation — relisting at higher price", reportedBy: "User #612", time: "3 hours ago" },
-];
+type Report = {
+  id: number;
+  reason: string;
+  status: string;
+  created_at: string;
+  ads: { title: string } | null;
+};
+
+type AdminUser = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  city: string | null;
+  created_at: string;
+  is_admin: boolean;
+};
+
+function relTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 export default function AdminPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("Dashboard");
-  const [approved, setApproved] = useState<string[]>([]);
-  const [rejected, setRejected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [pendingAds, setPendingAds] = useState<PendingAd[]>([]);
+  const [cnicQueue, setCnicQueue] = useState<CnicUser[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [userSearch, setUserSearch] = useState("");
+  const [actioning, setActioning] = useState<string | null>(null);
 
-  function approve(id: string) { setApproved(a => [...a, id]); }
-  function reject(id: string) { setRejected(r => [...r, id]); }
-  function isPending(id: string) { return !approved.includes(id) && !rejected.includes(id); }
+  useEffect(() => { loadAll(); }, []);
+
+  async function loadAll() {
+    setLoading(true);
+    const supabase = createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setIsAdmin(false); setLoading(false); return; }
+
+    const { data: me } = await supabase.from("users").select("is_admin").eq("id", user.id).single();
+    if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
+    setIsAdmin(true);
+
+    const [{ data: ads }, { data: cnics }, { data: reps }, { count }, { data: users }] = await Promise.all([
+      supabase.from("ads").select("id, title, price, city, created_at, ad_photos(url), users(full_name)").eq("status", "pending").order("created_at", { ascending: true }),
+      supabase.from("users").select("id, full_name, phone, city, cnic_front_url, cnic_back_url, selfie_url, created_at").eq("cnic_verified", false).not("cnic_front_url", "is", null),
+      supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
+      supabase.from("users").select("id", { count: "exact", head: true }),
+      supabase.from("users").select("id, full_name, phone, city, created_at, is_admin").order("created_at", { ascending: false }).limit(50),
+    ]);
+
+    setPendingAds((ads as unknown as PendingAd[]) ?? []);
+    setCnicQueue((cnics as CnicUser[]) ?? []);
+    setReports((reps as unknown as Report[]) ?? []);
+    setTotalUsers(count ?? 0);
+    setAdminUsers((users as AdminUser[]) ?? []);
+    setLoading(false);
+  }
+
+  async function approveAd(id: number) {
+    setActioning(`ad-${id}`);
+    const supabase = createClient();
+    await supabase.from("ads").update({ status: "active" }).eq("id", id);
+    setPendingAds(prev => prev.filter(a => a.id !== id));
+    setActioning(null);
+  }
+
+  async function rejectAd(id: number) {
+    setActioning(`ad-rej-${id}`);
+    const supabase = createClient();
+    await supabase.from("ads").update({ status: "rejected" }).eq("id", id);
+    setPendingAds(prev => prev.filter(a => a.id !== id));
+    setActioning(null);
+  }
+
+  async function approveCnic(id: string) {
+    setActioning(`cnic-${id}`);
+    const supabase = createClient();
+    await supabase.from("users").update({ cnic_verified: true }).eq("id", id);
+    setCnicQueue(prev => prev.filter(u => u.id !== id));
+    setActioning(null);
+  }
+
+  async function rejectCnic(id: string) {
+    setCnicQueue(prev => prev.filter(u => u.id !== id));
+  }
+
+  async function dismissReport(id: number) {
+    const supabase = createClient();
+    await supabase.from("reports").update({ status: "dismissed" }).eq("id", id);
+    setReports(prev => prev.filter(r => r.id !== id));
+  }
+
+  async function logout() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    router.push("/admin/login");
+    router.refresh();
+  }
+
+  const filteredUsers = adminUsers.filter(u =>
+    !userSearch || (u.full_name ?? "").toLowerCase().includes(userSearch.toLowerCase()) || (u.phone ?? "").includes(userSearch)
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-[#F0F0EE]">
+        <Loader2 size={28} strokeWidth={2} className="animate-spin" style={{ color: "var(--brand-green)" }} />
+      </div>
+    );
+  }
+
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center bg-[#F0F0EE]">
+        <Shield size={40} strokeWidth={1.5} className="mb-3 text-red-400" />
+        <p className="text-base font-bold text-[var(--text-primary)]">Access Denied</p>
+        <p className="text-sm text-[var(--text-muted)]">Admin privileges required</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-dvh flex flex-col bg-[#F0F0EE]">
-      {/* Admin header */}
       <header className="bg-[#1a1a1a] text-white px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--brand-green)" }}>
@@ -49,9 +174,18 @@ export default function AdminPage() {
           <span className="text-white/30 text-xs">|</span>
           <span className="text-white/60 text-xs font-medium">Admin Panel</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-[var(--brand-green)] flex items-center justify-center text-xs font-bold">A</div>
-          <span className="text-xs text-white/60">Admin</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-[var(--brand-green)] flex items-center justify-center text-xs font-bold">A</div>
+            <span className="text-xs text-white/60">Admin</span>
+          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white transition-colors px-2 py-1.5 rounded-lg hover:bg-white/10"
+          >
+            <LogOut size={14} strokeWidth={2} />
+            Logout
+          </button>
         </div>
       </header>
 
@@ -69,14 +203,14 @@ export default function AdminPage() {
               }`}
             >
               {tab}
-              {tab === "Ad Queue" && (
+              {tab === "Ad Queue" && pendingAds.length > 0 && (
                 <span className="w-5 h-5 rounded-full bg-[var(--brand-green)] text-white text-[10px] font-bold flex items-center justify-center">
-                  {AD_QUEUE.filter(a => isPending(a.id)).length}
+                  {pendingAds.length}
                 </span>
               )}
-              {tab === "CNIC Queue" && (
-                <span className="w-5 h-5 rounded-full bg-[var(--brand-blue)] text-white text-[10px] font-bold flex items-center justify-center">
-                  {CNIC_QUEUE.filter(c => isPending(c.id)).length}
+              {tab === "CNIC Queue" && cnicQueue.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {cnicQueue.length}
                 </span>
               )}
             </button>
@@ -84,7 +218,7 @@ export default function AdminPage() {
         </aside>
 
         {/* Mobile tabs */}
-        <div className="md:hidden overflow-x-auto no-scrollbar border-b border-[var(--border)] bg-white w-full">
+        <div className="md:hidden overflow-x-auto no-scrollbar border-b border-[var(--border)] bg-white w-full fixed top-[44px] z-10">
           <div className="flex gap-0 w-max">
             {TABS.map(tab => (
               <button
@@ -100,16 +234,15 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Content */}
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-auto mt-10 md:mt-0">
           {activeTab === "Dashboard" && (
             <div>
               <h1 className="text-xl font-bold text-[var(--text-primary)] mb-6">Dashboard</h1>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <StatCard icon={<FileText size={20} strokeWidth={2} />} value={AD_QUEUE.filter(a => isPending(a.id)).length} label="Pending Ads" color="green" />
-                <StatCard icon={<Shield size={20} strokeWidth={2} />} value={CNIC_QUEUE.filter(c => isPending(c.id)).length} label="CNIC Verifications" color="blue" />
-                <StatCard icon={<Flag size={20} strokeWidth={2} />} value={REPORTS.length} label="Active Reports" color="red" />
-                <StatCard icon={<Users size={20} strokeWidth={2} />} value={1247} label="Total Users" color="gray" />
+                <StatCard icon={<FileText size={20} strokeWidth={2} />} value={pendingAds.length} label="Pending Ads" color="green" />
+                <StatCard icon={<Shield size={20} strokeWidth={2} />} value={cnicQueue.length} label="CNIC Verifications" color="blue" />
+                <StatCard icon={<Flag size={20} strokeWidth={2} />} value={reports.length} label="Active Reports" color="red" />
+                <StatCard icon={<Users size={20} strokeWidth={2} />} value={totalUsers} label="Total Users" color="gray" />
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -118,18 +251,22 @@ export default function AdminPage() {
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Recent Ad Submissions</h3>
                     <button onClick={() => setActiveTab("Ad Queue")} className="text-xs text-[var(--brand-green)] font-medium">View all</button>
                   </div>
-                  <div className="space-y-3">
-                    {AD_QUEUE.slice(0, 3).map(ad => (
-                      <div key={ad.id} className="flex items-center gap-3">
-                        <Clock size={14} strokeWidth={2} className="text-[var(--text-muted)] flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-[var(--text-primary)] truncate">{ad.title}</p>
-                          <p className="text-[11px] text-[var(--text-muted)]">{ad.seller} · {ad.time}</p>
+                  {pendingAds.length === 0 ? (
+                    <p className="text-xs text-[var(--text-muted)] py-4 text-center">No pending ads</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingAds.slice(0, 3).map(ad => (
+                        <div key={ad.id} className="flex items-center gap-3">
+                          <Clock size={14} strokeWidth={2} className="text-[var(--text-muted)] flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-[var(--text-primary)] truncate">{ad.title}</p>
+                            <p className="text-[11px] text-[var(--text-muted)]">{ad.users?.full_name ?? "Unknown"} · {relTime(ad.created_at)}</p>
+                          </div>
+                          <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Pending</span>
                         </div>
-                        <PendingBadge id={ad.id} approved={approved} rejected={rejected} />
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="card p-4">
@@ -137,17 +274,21 @@ export default function AdminPage() {
                     <h3 className="text-sm font-semibold text-[var(--text-primary)]">Recent Reports</h3>
                     <button onClick={() => setActiveTab("Reports")} className="text-xs text-[var(--brand-green)] font-medium">View all</button>
                   </div>
-                  <div className="space-y-3">
-                    {REPORTS.map(r => (
-                      <div key={r.id} className="flex items-start gap-3">
-                        <AlertTriangle size={14} strokeWidth={2} className="text-amber-500 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-xs font-medium text-[var(--text-primary)]">{r.type}: {r.description}</p>
-                          <p className="text-[11px] text-[var(--text-muted)]">{r.reportedBy} · {r.time}</p>
+                  {reports.length === 0 ? (
+                    <p className="text-xs text-[var(--text-muted)] py-4 text-center">No active reports</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {reports.slice(0, 3).map(r => (
+                        <div key={r.id} className="flex items-start gap-3">
+                          <AlertTriangle size={14} strokeWidth={2} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-medium text-[var(--text-primary)]">{r.ads?.title ?? "Ad"}: {r.reason}</p>
+                            <p className="text-[11px] text-[var(--text-muted)]">{relTime(r.created_at)}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -157,57 +298,70 @@ export default function AdminPage() {
             <div>
               <div className="flex items-center justify-between mb-5">
                 <h1 className="text-xl font-bold text-[var(--text-primary)]">Ad Approval Queue</h1>
-                <span className="text-sm text-[var(--text-muted)]">{AD_QUEUE.filter(a => isPending(a.id)).length} pending</span>
+                <span className="text-sm text-[var(--text-muted)]">{pendingAds.length} pending</span>
               </div>
-              <div className="space-y-4">
-                {AD_QUEUE.map(ad => (
-                  <div key={ad.id} className="card p-4">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">{ad.title}</p>
-                        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                          <span>{ad.seller}</span>
-                          <span className="flex items-center gap-1"><MapPin size={11} />{ad.city}</span>
-                          <span className="flex items-center gap-1"><Clock size={11} />{ad.time}</span>
+              {pendingAds.length === 0 ? (
+                <div className="card p-8 text-center">
+                  <CheckCircle size={32} strokeWidth={1.5} className="mx-auto mb-3 text-[var(--brand-green)]" />
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">All caught up!</p>
+                  <p className="text-xs text-[var(--text-muted)]">No ads pending review</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingAds.map(ad => {
+                    const isActioning = actioning === `ad-${ad.id}` || actioning === `ad-rej-${ad.id}`;
+                    return (
+                      <div key={ad.id} className="card p-4">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">{ad.title}</p>
+                            <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                              <span>{ad.users?.full_name ?? "Unknown"}</span>
+                              {ad.city && <span className="flex items-center gap-1"><MapPin size={11} />{ad.city}</span>}
+                              <span className="flex items-center gap-1"><Clock size={11} />{relTime(ad.created_at)}</span>
+                            </div>
+                          </div>
+                          <p className="text-base font-bold text-[var(--text-primary)] whitespace-nowrap">
+                            Rs {ad.price >= 100000 ? `${(ad.price / 100000).toFixed(1)}L` : `${(ad.price / 1000).toFixed(0)}k`}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3 mb-3 text-xs text-[var(--text-muted)]">
+                          <span className="flex items-center gap-1"><Camera size={13} strokeWidth={2} /> {ad.ad_photos.length} photos</span>
+                        </div>
+
+                        {ad.ad_photos.length > 0 && (
+                          <div className="flex gap-2 mb-3 overflow-x-auto">
+                            {ad.ad_photos.slice(0, 4).map((p, i) => (
+                              <img key={i} src={p.url} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => approveAd(ad.id)}
+                            disabled={isActioning}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            {actioning === `ad-${ad.id}` ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} strokeWidth={2} />} Approve
+                          </button>
+                          <button
+                            onClick={() => rejectAd(ad.id)}
+                            disabled={isActioning}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            {actioning === `ad-rej-${ad.id}` ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} strokeWidth={2} />} Reject
+                          </button>
+                          <button className="px-3 py-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg)]">
+                            <Eye size={15} strokeWidth={2} />
+                          </button>
                         </div>
                       </div>
-                      <p className="text-base font-bold text-[var(--text-primary)] whitespace-nowrap">
-                        Rs {(ad.price / 1000).toFixed(0)}k
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-3 mb-3 text-xs text-[var(--text-muted)]">
-                      <span className="flex items-center gap-1"><Camera size={13} strokeWidth={2} /> {ad.photos} photos</span>
-                      {ad.hasOwnership && <span className="badge-owned">Ownership doc</span>}
-                    </div>
-
-                    {isPending(ad.id) ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => approve(ad.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors"
-                        >
-                          <CheckCircle size={15} strokeWidth={2} /> Approve
-                        </button>
-                        <button
-                          onClick={() => reject(ad.id)}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors"
-                        >
-                          <XCircle size={15} strokeWidth={2} /> Reject
-                        </button>
-                        <button className="px-3 py-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg)]">
-                          <Eye size={15} strokeWidth={2} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className={`flex items-center gap-2 py-2 px-3 rounded-lg text-sm font-medium ${approved.includes(ad.id) ? "bg-[var(--brand-green-light)] text-[var(--brand-green)]" : "bg-red-50 text-red-600"}`}>
-                        {approved.includes(ad.id) ? <CheckCircle size={15} strokeWidth={2} /> : <XCircle size={15} strokeWidth={2} />}
-                        {approved.includes(ad.id) ? "Approved" : "Rejected"}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -215,58 +369,70 @@ export default function AdminPage() {
             <div>
               <div className="flex items-center justify-between mb-5">
                 <h1 className="text-xl font-bold text-[var(--text-primary)]">CNIC Verification Queue</h1>
-                <span className="text-sm text-[var(--text-muted)]">{CNIC_QUEUE.filter(c => isPending(c.id)).length} pending</span>
+                <span className="text-sm text-[var(--text-muted)]">{cnicQueue.length} pending</span>
               </div>
-              <div className="space-y-4">
-                {CNIC_QUEUE.map(item => (
-                  <div key={item.id} className="card p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                        style={{ background: "var(--brand-blue)" }}>
-                        {item.name[0]}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">{item.name}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{item.phone} · {item.city} · {item.time}</p>
-                      </div>
-                      <div className="ml-auto text-right">
-                        <p className="text-lg font-black" style={{ color: item.matchScore >= 90 ? "var(--brand-green)" : "var(--danger)" }}>
-                          {item.matchScore}%
-                        </p>
-                        <p className="text-[10px] text-[var(--text-muted)]">face match</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      {["CNIC Front", "CNIC Back", "Selfie"].map((label, i) => (
-                        <div key={label} className="aspect-video bg-[var(--bg)] rounded-lg border border-[var(--border)] flex flex-col items-center justify-center gap-1">
-                          {i < 2
-                            ? <CreditCard size={20} strokeWidth={1.5} className="text-[var(--text-muted)]" />
-                            : <ScanFace size={20} strokeWidth={1.5} className="text-[var(--text-muted)]" />
-                          }
-                          <span className="text-[10px] text-[var(--text-muted)]">{label}</span>
+              {cnicQueue.length === 0 ? (
+                <div className="card p-8 text-center">
+                  <Shield size={32} strokeWidth={1.5} className="mx-auto mb-3 text-[var(--brand-green)]" />
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">Queue empty</p>
+                  <p className="text-xs text-[var(--text-muted)]">No CNICs pending verification</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cnicQueue.map(item => {
+                    const isActioning = actioning === `cnic-${item.id}`;
+                    return (
+                      <div key={item.id} className="card p-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white bg-blue-500">
+                            {(item.full_name ?? "U")[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-[var(--text-primary)]">{item.full_name ?? "Unknown"}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{item.phone ?? "—"} · {item.city ?? "—"} · {relTime(item.created_at)}</p>
+                          </div>
                         </div>
-                      ))}
-                    </div>
 
-                    {isPending(item.id) ? (
-                      <div className="flex gap-2">
-                        <button onClick={() => approve(item.id)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors">
-                          <CheckCircle size={15} strokeWidth={2} /> Verify
-                        </button>
-                        <button onClick={() => reject(item.id)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors">
-                          <XCircle size={15} strokeWidth={2} /> Reject
-                        </button>
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          {[
+                            { label: "CNIC Front", url: item.cnic_front_url, icon: <CreditCard size={20} strokeWidth={1.5} /> },
+                            { label: "CNIC Back", url: item.cnic_back_url, icon: <CreditCard size={20} strokeWidth={1.5} /> },
+                            { label: "Selfie", url: item.selfie_url, icon: <ScanFace size={20} strokeWidth={1.5} /> },
+                          ].map(({ label, url, icon }) => (
+                            <div key={label} className="aspect-video bg-[var(--bg)] rounded-lg border border-[var(--border)] overflow-hidden flex flex-col items-center justify-center gap-1">
+                              {url ? (
+                                <img src={url} alt={label} className="w-full h-full object-cover" />
+                              ) : (
+                                <>
+                                  <span className="text-[var(--text-muted)]">{icon}</span>
+                                  <span className="text-[10px] text-[var(--text-muted)]">{label}</span>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => approveCnic(item.id)}
+                            disabled={isActioning}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            {isActioning ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} strokeWidth={2} />} Verify
+                          </button>
+                          <button
+                            onClick={() => rejectCnic(item.id)}
+                            disabled={isActioning}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                          >
+                            <XCircle size={15} strokeWidth={2} /> Reject
+                          </button>
+                        </div>
                       </div>
-                    ) : (
-                      <div className={`flex items-center gap-2 py-2 px-3 rounded-lg text-sm font-medium ${approved.includes(item.id) ? "bg-[var(--brand-green-light)] text-[var(--brand-green)]" : "bg-red-50 text-red-600"}`}>
-                        {approved.includes(item.id) ? <CheckCircle size={15} strokeWidth={2} /> : <XCircle size={15} strokeWidth={2} />}
-                        {approved.includes(item.id) ? "Verified" : "Rejected"}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -276,32 +442,38 @@ export default function AdminPage() {
               <div className="flex items-center gap-3 mb-5">
                 <div className="flex-1 flex items-center gap-2 bg-white border border-[var(--border)] rounded-lg px-3 py-2.5">
                   <Search size={16} strokeWidth={2} className="text-[var(--text-muted)]" />
-                  <input type="text" placeholder="Search by CNIC or phone..." className="flex-1 bg-transparent outline-none text-sm" />
+                  <input
+                    type="text"
+                    placeholder="Search by name or phone..."
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    className="flex-1 bg-transparent outline-none text-sm"
+                  />
                 </div>
               </div>
               <div className="card overflow-hidden">
-                {[
-                  { name: "Abdul Rehman", phone: "0300-1234567", cnic: "42101-XXXXX-X", city: "Karachi", ads: 5, status: "active" },
-                  { name: "Bilal Ahmed", phone: "0321-9876543", cnic: "35202-XXXXX-X", city: "Lahore", ads: 3, status: "active" },
-                  { name: "Sana Malik", phone: "0345-1231234", cnic: "61101-XXXXX-X", city: "Islamabad", ads: 1, status: "banned" },
-                ].map((user, i) => (
-                  <div key={i} className={`flex items-center gap-3 p-4 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                      style={{ background: user.status === "banned" ? "#e53e3e" : "var(--brand-green)" }}>
-                      {user.name[0]}
+                {filteredUsers.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)] text-center py-8">No users found</p>
+                ) : (
+                  filteredUsers.map((user, i) => (
+                    <div key={user.id} className={`flex items-center gap-3 p-4 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                        style={{ background: user.is_admin ? "#7c3aed" : "var(--brand-green)" }}>
+                        {(user.full_name ?? "U")[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">{user.full_name ?? "—"}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{user.phone ?? "—"} · {user.city ?? "—"}</p>
+                      </div>
+                      {user.is_admin && (
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-50 text-purple-600">Admin</span>
+                      )}
+                      <button className="p-1.5 text-[var(--text-muted)] hover:text-[var(--brand-green)]">
+                        <ChevronRight size={16} strokeWidth={2} />
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">{user.name}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{user.phone} · {user.city} · {user.ads} ads</p>
-                    </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${user.status === "active" ? "bg-[var(--brand-green-light)] text-[var(--brand-green)]" : "bg-red-50 text-red-600"}`}>
-                      {user.status}
-                    </span>
-                    <button className="p-1.5 text-[var(--text-muted)] hover:text-[var(--brand-green)]">
-                      <ChevronRight size={16} strokeWidth={2} />
-                    </button>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -309,68 +481,46 @@ export default function AdminPage() {
           {activeTab === "Reports" && (
             <div>
               <h1 className="text-xl font-bold text-[var(--text-primary)] mb-5">Reports Queue</h1>
-              <div className="space-y-3">
-                {REPORTS.map(r => (
-                  <div key={r.id} className="card p-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${r.type === "User" ? "bg-red-50" : "bg-amber-50"}`}>
-                        <AlertTriangle size={16} strokeWidth={2} className={r.type === "User" ? "text-red-500" : "text-amber-500"} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.type === "User" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>
-                            {r.type}
-                          </span>
-                          <span className="text-xs text-[var(--text-muted)]">{r.time}</span>
+              {reports.length === 0 ? (
+                <div className="card p-8 text-center">
+                  <Flag size={32} strokeWidth={1.5} className="mx-auto mb-3 text-[var(--text-muted)]" />
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">No active reports</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {reports.map(r => (
+                    <div key={r.id} className="card p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50">
+                          <AlertTriangle size={16} strokeWidth={2} className="text-amber-500" />
                         </div>
-                        <p className="text-sm text-[var(--text-primary)] mb-1">{r.description}</p>
-                        <p className="text-xs text-[var(--text-muted)]">Reported by: {r.reportedBy}</p>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <button className="px-3 py-1.5 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-xs font-semibold">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs text-[var(--text-muted)]">{relTime(r.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-[var(--text-primary)] mb-1">{r.ads?.title ?? "Ad"}: {r.reason}</p>
+                        </div>
+                        <button
+                          onClick={() => dismissReport(r.id)}
+                          className="px-3 py-1.5 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-xs font-semibold"
+                        >
                           Dismiss
-                        </button>
-                        <button className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold">
-                          Ban
                         </button>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === "Location Requests" && (
             <div>
               <h1 className="text-xl font-bold text-[var(--text-primary)] mb-5">Location Change Requests</h1>
-              <div className="space-y-3">
-                {[
-                  { name: "Ahmed Raza", from: "Lahore", to: "Karachi", reason: "Relocated for work", time: "1 day ago" },
-                  { name: "Maria Qureshi", from: "Islamabad", to: "Peshawar", reason: "Family relocation", time: "3 days ago" },
-                ].map((req, i) => (
-                  <div key={i} className="card p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-9 h-9 rounded-full bg-[var(--brand-green-light)] flex items-center justify-center text-sm font-bold text-[var(--brand-green)]">
-                        {req.name[0]}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">{req.name}</p>
-                        <p className="text-xs text-[var(--text-muted)]">{req.time}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mb-2 text-sm">
-                      <span className="px-2.5 py-1 bg-[var(--bg)] rounded-lg font-medium text-[var(--text-primary)]">{req.from}</span>
-                      <ChevronRight size={14} strokeWidth={2} className="text-[var(--text-muted)]" />
-                      <span className="px-2.5 py-1 bg-[var(--brand-green-light)] rounded-lg font-medium text-[var(--brand-green)]">{req.to}</span>
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)] mb-3">&quot;{req.reason}&quot;</p>
-                    <div className="flex gap-2">
-                      <button className="flex-1 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold">Approve</button>
-                      <button className="flex-1 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold">Reject</button>
-                    </div>
-                  </div>
-                ))}
+              <div className="card p-8 text-center">
+                <MapPin size={32} strokeWidth={1.5} className="mx-auto mb-3 text-[var(--text-muted)]" />
+                <p className="text-sm font-semibold text-[var(--text-primary)]">No pending requests</p>
+                <p className="text-xs text-[var(--text-muted)]">Location change requests will appear here</p>
               </div>
             </div>
           )}
@@ -381,18 +531,8 @@ export default function AdminPage() {
 }
 
 function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
-  const colors: Record<string, string> = {
-    green: "var(--brand-green-light)",
-    blue: "var(--brand-blue-light)",
-    red: "#fef2f2",
-    gray: "var(--bg)",
-  };
-  const textColors: Record<string, string> = {
-    green: "var(--brand-green)",
-    blue: "var(--brand-blue)",
-    red: "#e53e3e",
-    gray: "var(--text-primary)",
-  };
+  const colors: Record<string, string> = { green: "var(--brand-green-light)", blue: "#eff6ff", red: "#fef2f2", gray: "var(--bg)" };
+  const textColors: Record<string, string> = { green: "var(--brand-green)", blue: "#3b82f6", red: "#e53e3e", gray: "var(--text-primary)" };
   return (
     <div className="card p-4">
       <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: colors[color], color: textColors[color] }}>
@@ -402,10 +542,4 @@ function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value:
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
     </div>
   );
-}
-
-function PendingBadge({ id, approved, rejected }: { id: string; approved: string[]; rejected: string[] }) {
-  if (approved.includes(id)) return <span className="text-[10px] font-semibold text-[var(--brand-green)] bg-[var(--brand-green-light)] px-2 py-0.5 rounded-full">Approved</span>;
-  if (rejected.includes(id)) return <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">Rejected</span>;
-  return <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Pending</span>;
 }

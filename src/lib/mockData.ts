@@ -1,5 +1,9 @@
 import { Ad } from "@/components/AdCard";
 
+// Re-exports for backwards compatibility
+export { CATEGORY_TABS, CONDITIONS } from "@/lib/categories";
+export { CITIES } from "@/lib/locations";
+
 export const MOCK_ADS: Ad[] = [
   {
     id: "1",
@@ -132,37 +136,4 @@ export const MOCK_ADS: Ad[] = [
     area: "Gulberg II", city: "Lahore", postedAt: "5 hours ago",
     verified: true, owned: false, category: "animals",
   },
-];
-
-export const CATEGORY_TABS = [
-  { slug: "all",          label: "All" },
-  { slug: "mobiles",      label: "Mobiles" },
-  { slug: "vehicles",     label: "Vehicles" },
-  { slug: "property",     label: "Property" },
-  { slug: "electronics",  label: "Electronics" },
-  { slug: "furniture",    label: "Furniture" },
-  { slug: "fashion",      label: "Fashion" },
-  { slug: "books-sports", label: "Books & Sports" },
-  { slug: "kids",         label: "Kids" },
-  { slug: "services",     label: "Services" },
-  { slug: "animals",      label: "Animals" },
-  { slug: "jobs",         label: "Jobs" },
-  { slug: "other",        label: "Other" },
-];
-
-export const CITIES = [
-  "Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad",
-  "Multan", "Gujranwala", "Peshawar", "Quetta", "Hyderabad",
-  "Sialkot", "Bahawalpur", "Sargodha", "Abbottabad", "Sukkur",
-  "Sahiwal", "Dera Ghazi Khan", "Mirpur Khas",
-];
-
-export const CONDITIONS = [
-  "Brand New / Box Pack",
-  "Like New (< 3 months)",
-  "Excellent (10/10)",
-  "Very Good (9/10)",
-  "Good (8/10)",
-  "Fair (minor repair needed)",
-  "For Parts / Not Working",
 ];

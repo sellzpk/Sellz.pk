@@ -1,56 +1,80 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
-import { ArrowLeft, Camera, ChevronRight, Check, X, Upload, AlertCircle, Smartphone, Car, Home, Tv, Sofa, Shirt, BookOpen, Baby, Wrench, PawPrint, Briefcase, Package, Loader2 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { CONDITIONS } from "@/lib/mockData";
+import { ArrowLeft, Camera, ChevronRight, Check, X, Upload, AlertCircle, Loader2, FileImage } from "lucide-react";
+import { CATEGORIES, CONDITIONS } from "@/lib/categories";
+import { getAreas } from "@/lib/locations";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-const STEPS = ["Category", "Photos", "Ownership", "Details", "Review"];
-
-const CATEGORIES: { slug: string; label: string; Icon: LucideIcon; color: string; iconColor: string }[] = [
-  { slug: "mobiles",      label: "Mobiles",       Icon: Smartphone, color: "#e8f5e9", iconColor: "#1D9E75" },
-  { slug: "vehicles",     label: "Vehicles",       Icon: Car,        color: "#fde8e0", iconColor: "#E85D24" },
-  { slug: "property",     label: "Property",       Icon: Home,       color: "#fff8e1", iconColor: "#F59E0B" },
-  { slug: "electronics",  label: "Electronics",    Icon: Tv,         color: "#ede9fe", iconColor: "#6366F1" },
-  { slug: "furniture",    label: "Furniture",      Icon: Sofa,       color: "#e0f2fe", iconColor: "#0EA5E9" },
-  { slug: "fashion",      label: "Fashion",        Icon: Shirt,      color: "#fce7f3", iconColor: "#EC4899" },
-  { slug: "books-sports", label: "Books & Sports", Icon: BookOpen,   color: "#d1fae5", iconColor: "#10B981" },
-  { slug: "kids",         label: "Kids",           Icon: Baby,       color: "#fff3e0", iconColor: "#F97316" },
-  { slug: "services",     label: "Services",       Icon: Wrench,     color: "#ede9fe", iconColor: "#8B5CF6" },
-  { slug: "animals",      label: "Animals",        Icon: PawPrint,   color: "#ccfbf1", iconColor: "#14B8A6" },
-  { slug: "jobs",         label: "Jobs",           Icon: Briefcase,  color: "#e2e8f0", iconColor: "#64748B" },
-  { slug: "other",        label: "Other",          Icon: Package,    color: "#ede9fe", iconColor: "#A78BFA" },
-];
+const STEPS = ["Category", "Ownership", "Details", "Photos", "Review"];
 
 interface FormData {
   category: string;
   subcategory: string;
-  photos: string[];
-  ownershipDoc: string;
+  ownershipDocFile: File | null;
+  ownershipDocPreview: string;
   title: string;
   description: string;
   price: string;
   condition: string;
+  city: string;
+  area: string;
+  address: string;
+  // category-specific
+  brand: string;
+  model: string;
+  storage: string;
+  ptaApproved: boolean;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleYear: string;
+  vehicleMileage: string;
+  fuelType: string;
+  transmission: string;
+  propertyType: string;
+  bedrooms: string;
+  areaSize: string;
+  purpose: string;
+  // photos
+  photoFiles: File[];
+  photoPreviews: string[];
 }
+
+const EMPTY_FORM: FormData = {
+  category: "", subcategory: "",
+  ownershipDocFile: null, ownershipDocPreview: "",
+  title: "", description: "", price: "", condition: "",
+  city: "", area: "", address: "",
+  brand: "", model: "", storage: "", ptaApproved: false,
+  vehicleMake: "", vehicleModel: "", vehicleYear: "", vehicleMileage: "",
+  fuelType: "", transmission: "",
+  propertyType: "", bedrooms: "", areaSize: "", purpose: "",
+  photoFiles: [], photoPreviews: [],
+};
 
 export default function PostAdPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [whatsappStep, setWhatsappStep] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [whatsappAdded, setWhatsappAdded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const [insertedAdId, setInsertedAdId] = useState<number | null>(null);
-  const [form, setForm] = useState<FormData>({
-    category: "", subcategory: "", photos: [],
-    ownershipDoc: "", title: "", description: "",
-    price: "", condition: "",
-  });
+  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+
+  // auth gate
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { router.replace("/"); return; }
+      supabase.from("users").select("city").eq("id", user.id).single().then(({ data }) => {
+        if (!data?.city) { router.replace("/onboarding"); return; }
+        setForm(f => ({ ...f, city: data.city }));
+      });
+    });
+  }, [router]);
 
   function next() { setStep(s => Math.min(STEPS.length - 1, s + 1)); }
   function back() { setStep(s => Math.max(0, s - 1)); }
@@ -62,11 +86,26 @@ export default function PostAdPage() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      setSubmitError("You must be logged in to post an ad.");
+      setSubmitError("Not logged in.");
       setSubmitting(false);
       return;
     }
 
+    // Upload ownership doc if present
+    let ownershipUrl: string | null = null;
+    if (form.ownershipDocFile) {
+      const ext = form.ownershipDocFile.name.split(".").pop() ?? "jpg";
+      const path = `${user.id}/ownership_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("ad-photos")
+        .upload(path, form.ownershipDocFile, { contentType: form.ownershipDocFile.type });
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
+        ownershipUrl = urlData.publicUrl;
+      }
+    }
+
+    // Insert ad
     const { data: adData, error: adError } = await supabase
       .from("ads")
       .insert({
@@ -75,8 +114,11 @@ export default function PostAdPage() {
         description: form.description || null,
         price: Number(form.price),
         category: form.category,
+        subcategory: form.subcategory || null,
         condition: form.condition || null,
-        ownership_proof_url: form.ownershipDoc || null,
+        city: form.city || null,
+        area: form.area || null,
+        ownership_proof_url: ownershipUrl,
         status: "pending",
       })
       .select("id")
@@ -88,35 +130,31 @@ export default function PostAdPage() {
       return;
     }
 
-    if (form.photos.length > 0) {
+    // Upload photos
+    const photoUrls: string[] = [];
+    for (let i = 0; i < form.photoFiles.length; i++) {
+      const file = form.photoFiles[i];
+      setUploadProgress(`Uploading photo ${i + 1} of ${form.photoFiles.length}...`);
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `${user.id}/${adData.id}_${i}_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("ad-photos")
+        .upload(path, file, { contentType: file.type });
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
+        photoUrls.push(urlData.publicUrl);
+      }
+    }
+
+    if (photoUrls.length > 0) {
       await supabase.from("ad_photos").insert(
-        form.photos.map((url, i) => ({ ad_id: adData.id, url, order_index: i }))
+        photoUrls.map((url, i) => ({ ad_id: adData.id, url, order_index: i }))
       );
     }
 
-    setInsertedAdId(adData.id);
+    setUploadProgress("");
     setSubmitting(false);
-    setWhatsappStep(true);
-  }
-
-  async function handleWhatsappDone(added: boolean, waNumber?: string) {
-    if (added && waNumber) {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("users").upsert({
-          id: user.id,
-          whatsapp_number: waNumber,
-          whatsapp_chat_only: true,
-        });
-      }
-    }
-    setWhatsappAdded(added);
     setSubmitted(true);
-  }
-
-  if (whatsappStep && !submitted) {
-    return <StepWhatsapp onDone={(added, wa) => handleWhatsappDone(added, wa)} />;
   }
 
   if (submitted) {
@@ -126,20 +164,9 @@ export default function PostAdPage() {
           <Check size={36} strokeWidth={2.5} className="text-[var(--brand-green)]" />
         </div>
         <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2">Ad Submitted!</h2>
-        <p className="text-sm text-[var(--text-secondary)] mb-4 max-w-xs leading-relaxed">
-          Your ad is under review. We&apos;ll notify you within <strong>24 hours</strong> once approved.
+        <p className="text-sm text-[var(--text-secondary)] mb-8 max-w-xs leading-relaxed">
+          Under review. We&apos;ll approve within <strong>24 hours</strong>.
         </p>
-        {!whatsappAdded && (
-          <div className="card p-4 mb-6 max-w-xs w-full text-left">
-            <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">Get more responses</p>
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-              Buyers prefer sellers with WhatsApp — add yours now to respond faster.
-            </p>
-            <button className="btn-primary w-full justify-center py-2.5 text-sm">
-              Add WhatsApp Number
-            </button>
-          </div>
-        )}
         <Link href="/" className="btn-primary">Back to Home</Link>
       </div>
     );
@@ -147,15 +174,14 @@ export default function PostAdPage() {
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-white border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">
           {step > 0 ? (
-            <button onClick={back} className="p-1.5 -ml-1 rounded-lg hover:bg-[var(--bg)] transition-colors">
+            <button onClick={back} className="p-1.5 -ml-1 rounded-lg hover:bg-[var(--bg)] transition-colors" style={{ minHeight: 44, minWidth: 44 }}>
               <ArrowLeft size={20} strokeWidth={2} />
             </button>
           ) : (
-            <Link href="/" className="p-1.5 -ml-1 rounded-lg hover:bg-[var(--bg)] transition-colors">
+            <Link href="/" className="p-1.5 -ml-1 rounded-lg hover:bg-[var(--bg)] transition-colors flex items-center justify-center" style={{ minHeight: 44, minWidth: 44 }}>
               <X size={20} strokeWidth={2} />
             </Link>
           )}
@@ -163,9 +189,22 @@ export default function PostAdPage() {
             <p className="text-sm font-semibold text-[var(--text-primary)]">{STEPS[step]}</p>
             <p className="text-xs text-[var(--text-muted)]">Step {step + 1} of {STEPS.length}</p>
           </div>
+          {/* Step dots */}
+          <div className="flex gap-1">
+            {STEPS.map((_, i) => (
+              <div
+                key={i}
+                className="rounded-full transition-all"
+                style={{
+                  width: i === step ? 16 : 6,
+                  height: 6,
+                  background: i <= step ? "var(--brand-green)" : "var(--border)",
+                }}
+              />
+            ))}
+          </div>
         </div>
-        {/* Progress bar */}
-        <div className="h-1 bg-[var(--border)]">
+        <div className="h-0.5 bg-[var(--border)]">
           <div
             className="h-full transition-all duration-300"
             style={{ width: `${((step + 1) / STEPS.length) * 100}%`, background: "var(--brand-green)" }}
@@ -176,10 +215,18 @@ export default function PostAdPage() {
       <main className="flex-1 pb-24">
         <div className="max-w-lg mx-auto px-4 py-6">
           {step === 0 && <StepCategory form={form} setForm={setForm} onNext={next} />}
-          {step === 1 && <StepPhotos form={form} setForm={setForm} onNext={next} />}
-          {step === 2 && <StepOwnership form={form} setForm={setForm} onNext={next} />}
-          {step === 3 && <StepDetails form={form} setForm={setForm} onNext={next} />}
-          {step === 4 && <StepReview form={form} onSubmit={handleSubmit} submitting={submitting} submitError={submitError} />}
+          {step === 1 && <StepOwnership form={form} setForm={setForm} onNext={next} />}
+          {step === 2 && <StepDetails form={form} setForm={setForm} onNext={next} />}
+          {step === 3 && <StepPhotos form={form} setForm={setForm} onNext={next} />}
+          {step === 4 && (
+            <StepReview
+              form={form}
+              onSubmit={handleSubmit}
+              submitting={submitting}
+              uploadProgress={uploadProgress}
+              submitError={submitError}
+            />
+          )}
         </div>
       </main>
 
@@ -188,7 +235,48 @@ export default function PostAdPage() {
   );
 }
 
+// ─── Step Category ────────────────────────────────────────────────────────────
+
 function StepCategory({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
+  const [pickedCat, setPickedCat] = useState("");
+  const selected = CATEGORIES.find(c => c.slug === pickedCat);
+
+  if (pickedCat && selected) {
+    return (
+      <div>
+        <button
+          onClick={() => setPickedCat("")}
+          className="flex items-center gap-1.5 text-sm mb-4 font-medium"
+          style={{ color: "var(--brand-green)", minHeight: 44 }}
+        >
+          <ArrowLeft size={15} strokeWidth={2} /> {selected.label}
+        </button>
+        <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Choose Subcategory</h2>
+        <p className="text-sm text-[var(--text-muted)] mb-5">What type of {selected.label.toLowerCase()}?</p>
+        <div className="space-y-2">
+          {selected.subcategories.map(sub => (
+            <button
+              key={sub}
+              onClick={() => { setForm({ ...form, category: pickedCat, subcategory: sub }); onNext(); }}
+              className="w-full flex items-center justify-between px-4 rounded-xl border text-sm font-medium text-left transition-colors hover:border-[var(--brand-green)] hover:bg-[var(--brand-green-light)]"
+              style={{ borderColor: "var(--border)", color: "var(--text-primary)", minHeight: 52 }}
+            >
+              {sub}
+              <ChevronRight size={15} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
+            </button>
+          ))}
+          <button
+            onClick={() => { setForm({ ...form, category: pickedCat, subcategory: "" }); onNext(); }}
+            className="w-full px-4 rounded-xl text-sm text-center"
+            style={{ color: "var(--text-muted)", minHeight: 44 }}
+          >
+            Skip subcategory
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Choose Category</h2>
@@ -197,8 +285,9 @@ function StepCategory({ form, setForm, onNext }: { form: FormData; setForm: (f: 
         {CATEGORIES.map(({ slug, label, Icon, color, iconColor }) => (
           <button
             key={slug}
-            onClick={() => { setForm({ ...form, category: slug }); onNext(); }}
-            className={`card p-4 flex flex-col items-center gap-2 transition-all ${form.category === slug ? "border-[var(--brand-green)] bg-[var(--brand-green-light)]" : ""}`}
+            onClick={() => setPickedCat(slug)}
+            className="card p-4 flex flex-col items-center gap-2 transition-all hover:border-[var(--brand-green)]"
+            style={{ minHeight: 80 }}
           >
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: color }}>
               <Icon size={22} strokeWidth={1.75} style={{ color: iconColor }} />
@@ -211,82 +300,16 @@ function StepCategory({ form, setForm, onNext }: { form: FormData; setForm: (f: 
   );
 }
 
-function StepPhotos({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
-  const mockPhotos = [
-    "https://images.unsplash.com/photo-1695048132640-a67d1cc2e9c0?w=200&h=200&fit=crop",
-    "https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=200&h=200&fit=crop",
-  ];
-
-  function addPhoto() {
-    if (form.photos.length < 10) {
-      const url = mockPhotos[form.photos.length % mockPhotos.length];
-      setForm({ ...form, photos: [...form.photos, url] });
-    }
-  }
-
-  function removePhoto(i: number) {
-    setForm({ ...form, photos: form.photos.filter((_, idx) => idx !== i) });
-  }
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Add Photos</h2>
-      <p className="text-sm text-[var(--text-muted)] mb-1">Minimum 2, maximum 10 photos</p>
-
-      <div className="card p-3 mb-5 flex items-start gap-2">
-        <AlertCircle size={15} strokeWidth={2} className="text-[var(--brand-green)] flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-[var(--text-secondary)]">
-          <strong>Camera only.</strong> Photos are taken live to prevent fake listings. Gallery access is not permitted.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 mb-5">
-        {form.photos.map((photo, i) => (
-          <div key={i} className="aspect-square rounded-xl overflow-hidden relative">
-            <img src={photo} alt="" className="w-full h-full object-cover" />
-            <button
-              onClick={() => removePhoto(i)}
-              className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center"
-            >
-              <X size={12} strokeWidth={2.5} className="text-white" />
-            </button>
-            {i === 0 && (
-              <span className="absolute bottom-1 left-1 bg-[var(--brand-green)] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                Cover
-              </span>
-            )}
-          </div>
-        ))}
-        {form.photos.length < 10 && (
-          <button
-            onClick={addPhoto}
-            className="aspect-square rounded-xl border-2 border-dashed border-[var(--border)] flex flex-col items-center justify-center gap-1 hover:border-[var(--brand-green)] hover:bg-[var(--brand-green-light)] transition-colors"
-          >
-            <Camera size={22} strokeWidth={1.5} className="text-[var(--text-muted)]" />
-            <span className="text-[10px] text-[var(--text-muted)]">Take photo</span>
-          </button>
-        )}
-      </div>
-
-      <p className="text-xs text-[var(--text-muted)] mb-5 text-center">
-        Photos will be watermarked with &quot;sellz.pk&quot; automatically
-      </p>
-
-      <button
-        onClick={onNext}
-        disabled={form.photos.length < 2}
-        className="btn-primary w-full justify-center py-3 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        Continue ({form.photos.length}/2 min)
-        <ChevronRight size={16} strokeWidth={2.5} />
-      </button>
-    </div>
-  );
-}
+// ─── Step Ownership ───────────────────────────────────────────────────────────
 
 function StepOwnership({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
-  function addDoc() {
-    setForm({ ...form, ownershipDoc: "https://images.unsplash.com/photo-1568667256549-094345857637?w=400&h=300&fit=crop" });
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const preview = URL.createObjectURL(file);
+    setForm({ ...form, ownershipDocFile: file, ownershipDocPreview: preview });
   }
 
   return (
@@ -294,52 +317,72 @@ function StepOwnership({ form, setForm, onNext }: { form: FormData; setForm: (f:
       <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Ownership Proof</h2>
       <p className="text-sm text-[var(--text-muted)] mb-5">Optional — adds a blue Owned badge to your listing</p>
 
-      <div className="card p-4 mb-5">
-        <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">Accepted documents:</p>
-        <ul className="space-y-1.5">
-          {["Purchase invoice / receipt", "Vehicle registration (book)", "Property title deed", "Warranty card"].map(doc => (
-            <li key={doc} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)] flex-shrink-0" />
-              {doc}
-            </li>
+      <div className="card p-4 mb-5" style={{ background: "#fffbeb", borderColor: "#fde68a" }}>
+        <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">How to take this photo:</p>
+        <ol className="space-y-1.5 list-decimal list-inside">
+          {[
+            "Write your full name on a piece of paper",
+            "Place it next to your CNIC and the item",
+            "Take a clear photo of all three together",
+          ].map(step => (
+            <li key={step} className="text-xs text-[var(--text-secondary)]">{step}</li>
           ))}
-        </ul>
+        </ol>
       </div>
 
-      {form.ownershipDoc ? (
+      {form.ownershipDocPreview ? (
         <div className="relative rounded-xl overflow-hidden mb-5" style={{ aspectRatio: "4/3" }}>
-          <img src={form.ownershipDoc} alt="Ownership doc" className="w-full h-full object-cover" />
+          <img src={form.ownershipDocPreview} alt="Ownership doc" className="w-full h-full object-cover" />
           <button
-            onClick={() => setForm({ ...form, ownershipDoc: "" })}
-            className="absolute top-2 right-2 w-8 h-8 bg-black/60 rounded-full flex items-center justify-center"
+            onClick={() => setForm({ ...form, ownershipDocFile: null, ownershipDocPreview: "" })}
+            className="absolute top-2 right-2 w-9 h-9 bg-black/60 rounded-full flex items-center justify-center"
           >
-            <X size={15} strokeWidth={2.5} className="text-white" />
+            <X size={16} strokeWidth={2.5} className="text-white" />
           </button>
           <div className="absolute bottom-2 left-2">
-            <span className="badge-owned">Document uploaded</span>
+            <span className="badge-owned">Document added</span>
           </div>
         </div>
       ) : (
         <button
-          onClick={addDoc}
+          onClick={() => inputRef.current?.click()}
           className="w-full py-10 rounded-xl border-2 border-dashed border-[var(--border)] flex flex-col items-center gap-2 hover:border-[var(--brand-blue)] hover:bg-[var(--brand-blue-light)] transition-colors mb-5"
         >
           <Upload size={28} strokeWidth={1.5} className="text-[var(--text-muted)]" />
           <span className="text-sm font-medium text-[var(--text-secondary)]">Take photo of document</span>
-          <span className="text-xs text-[var(--text-muted)]">Camera only</span>
+          <span className="text-xs text-[var(--text-muted)]">Camera or gallery</span>
         </button>
       )}
 
-      <button onClick={onNext} className="btn-primary w-full justify-center py-3">
-        {form.ownershipDoc ? "Continue with Ownership Proof" : "Skip — No Ownership Proof"}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFile}
+      />
+
+      <button onClick={onNext} className="btn-primary w-full justify-center py-3" style={{ minHeight: 48 }}>
+        {form.ownershipDocPreview ? "Continue with Ownership Proof" : "Skip — No Ownership Proof"}
         <ChevronRight size={16} strokeWidth={2.5} />
       </button>
     </div>
   );
 }
 
+// ─── Step Details ─────────────────────────────────────────────────────────────
+
+const MOBILE_BRANDS = ["Samsung", "Apple", "Xiaomi", "Oppo", "Vivo", "Realme", "Tecno", "Infinix", "Nokia", "Other"];
+const FUEL_TYPES = ["Petrol", "Diesel", "CNG", "Hybrid", "Electric"];
+const TRANSMISSIONS = ["Manual", "Automatic", "CVT"];
+const PROPERTY_TYPES = ["Apartment", "House", "Plot", "Shop", "Office", "Warehouse", "Other"];
+const ELECTRONICS_BRANDS = ["Samsung", "LG", "Sony", "Haier", "TCL", "Dawlance", "PEL", "Kenwood", "Gree", "Other"];
+
 function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
-  const valid = form.title.trim().length >= 5 && form.price.trim().length > 0;
+  const areas = getAreas(form.city);
+  const valid = form.title.trim().length >= 5 && form.price.trim().length > 0 && form.condition.length > 0;
+  const cat = form.category;
 
   return (
     <div>
@@ -347,6 +390,44 @@ function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: F
       <p className="text-sm text-[var(--text-muted)] mb-5">Tell buyers about your item</p>
 
       <div className="space-y-4">
+        {/* Category-specific fields */}
+        {cat === "mobiles" && (
+          <>
+            <SelectField label="Brand" value={form.brand} onChange={v => setForm({ ...form, brand: v })} options={MOBILE_BRANDS} placeholder="Select brand" />
+            <TextField label="Model" value={form.model} onChange={v => setForm({ ...form, model: v })} placeholder="e.g. Galaxy A54" />
+            <SelectField label="Storage" value={form.storage} onChange={v => setForm({ ...form, storage: v })} options={["16GB","32GB","64GB","128GB","256GB","512GB","1TB"]} placeholder="Select storage" />
+            <ToggleField label="PTA Approved" value={form.ptaApproved} onChange={v => setForm({ ...form, ptaApproved: v })} />
+          </>
+        )}
+
+        {cat === "vehicles" && (
+          <>
+            <TextField label="Make" value={form.vehicleMake} onChange={v => setForm({ ...form, vehicleMake: v })} placeholder="e.g. Toyota, Honda, Suzuki" />
+            <TextField label="Model" value={form.vehicleModel} onChange={v => setForm({ ...form, vehicleModel: v })} placeholder="e.g. Corolla, Civic, Alto" />
+            <TextField label="Year" value={form.vehicleYear} onChange={v => setForm({ ...form, vehicleYear: v })} placeholder="e.g. 2022" inputMode="numeric" />
+            <TextField label="Mileage (km)" value={form.vehicleMileage} onChange={v => setForm({ ...form, vehicleMileage: v })} placeholder="e.g. 45000" inputMode="numeric" />
+            <SelectField label="Fuel Type" value={form.fuelType} onChange={v => setForm({ ...form, fuelType: v })} options={FUEL_TYPES} placeholder="Select fuel type" />
+            <SelectField label="Transmission" value={form.transmission} onChange={v => setForm({ ...form, transmission: v })} options={TRANSMISSIONS} placeholder="Select transmission" />
+          </>
+        )}
+
+        {cat === "property" && (
+          <>
+            <SelectField label="Property Type" value={form.propertyType} onChange={v => setForm({ ...form, propertyType: v })} options={PROPERTY_TYPES} placeholder="Select type" />
+            <SelectField label="Bedrooms" value={form.bedrooms} onChange={v => setForm({ ...form, bedrooms: v })} options={["Studio","1","2","3","4","5","6+"]} placeholder="Select bedrooms" />
+            <TextField label="Area Size" value={form.areaSize} onChange={v => setForm({ ...form, areaSize: v })} placeholder="e.g. 240 sq yards, 5 marla" />
+            <SelectField label="Purpose" value={form.purpose} onChange={v => setForm({ ...form, purpose: v })} options={["For Sale","For Rent"]} placeholder="Sale or Rent?" />
+          </>
+        )}
+
+        {(cat === "electronics" || cat === "appliances") && (
+          <>
+            <SelectField label="Brand" value={form.brand} onChange={v => setForm({ ...form, brand: v })} options={ELECTRONICS_BRANDS} placeholder="Select brand" />
+            <TextField label="Model" value={form.model} onChange={v => setForm({ ...form, model: v })} placeholder={'e.g. 55" QLED 4K'} />
+          </>
+        )}
+
+        {/* Common fields */}
         <div>
           <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">Title *</label>
           <input
@@ -399,11 +480,61 @@ function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: F
                     ? "border-[var(--brand-green)] bg-[var(--brand-green-light)] text-[var(--brand-green)]"
                     : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--brand-green)]"
                 }`}
+                style={{ minHeight: 44 }}
               >
                 {c}
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">City</label>
+          <div className="input-base flex items-center gap-2 opacity-70 cursor-not-allowed">
+            <span>{form.city || "Not set"}</span>
+            <span className="text-xs ml-auto" style={{ color: "var(--text-muted)" }}>from profile</span>
+          </div>
+        </div>
+
+        {areas.length > 0 && (
+          <div>
+            <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">Area</label>
+            <select
+              value={form.area}
+              onChange={e => setForm({ ...form, area: e.target.value })}
+              className="input-base"
+            >
+              <option value="">Select area</option>
+              {areas.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+        )}
+
+        {form.area === "Other" && (
+          <div>
+            <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">Enter area name</label>
+            <input
+              type="text"
+              placeholder="e.g. Johar Block 9"
+              value=""
+              onChange={e => setForm({ ...form, area: e.target.value })}
+              className="input-base"
+            />
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">
+            Address detail <span className="font-normal text-[var(--text-muted)]">(optional)</span>
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. Near Masjid, Block 5 main road"
+            value={form.address}
+            onChange={e => setForm({ ...form, address: e.target.value })}
+            className="input-base"
+            maxLength={120}
+          />
         </div>
       </div>
 
@@ -411,18 +542,173 @@ function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: F
         onClick={onNext}
         disabled={!valid}
         className="btn-primary w-full justify-center py-3 mt-6 disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ minHeight: 48 }}
       >
-        Review Ad
+        Continue to Photos
         <ChevronRight size={16} strokeWidth={2.5} />
       </button>
     </div>
   );
 }
 
-function StepReview({ form, onSubmit, submitting, submitError }: {
+// ─── Helper form controls ─────────────────────────────────────────────────────
+
+function TextField({ label, value, onChange, placeholder, inputMode }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+}) {
+  return (
+    <div>
+      <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">{label}</label>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="input-base"
+        inputMode={inputMode}
+      />
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]; placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)} className="input-base">
+        <option value="">{placeholder ?? "Select..."}</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function ToggleField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className="w-full flex items-center justify-between p-3.5 rounded-xl border transition-colors"
+      style={{ borderColor: value ? "var(--brand-green)" : "var(--border)", background: value ? "var(--brand-green-light)" : "var(--surface)", minHeight: 52 }}
+    >
+      <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
+      <div
+        className="w-11 h-6 rounded-full relative transition-colors flex-shrink-0"
+        style={{ background: value ? "var(--brand-green)" : "var(--border)" }}
+      >
+        <div
+          className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all"
+          style={{ left: value ? "calc(100% - 20px)" : 4 }}
+        />
+      </div>
+    </button>
+  );
+}
+
+// ─── Step Photos ──────────────────────────────────────────────────────────────
+
+function StepPhotos({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isMobile = typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
+
+  function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    const remaining = 10 - form.photoFiles.length;
+    const toAdd = files.slice(0, remaining);
+    const newFiles = [...form.photoFiles, ...toAdd];
+    const newPreviews = [...form.photoPreviews, ...toAdd.map(f => URL.createObjectURL(f))];
+    setForm({ ...form, photoFiles: newFiles, photoPreviews: newPreviews });
+    e.target.value = "";
+  }
+
+  function removePhoto(i: number) {
+    URL.revokeObjectURL(form.photoPreviews[i]);
+    const newFiles = form.photoFiles.filter((_, idx) => idx !== i);
+    const newPreviews = form.photoPreviews.filter((_, idx) => idx !== i);
+    setForm({ ...form, photoFiles: newFiles, photoPreviews: newPreviews });
+  }
+
+  return (
+    <div>
+      <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Add Photos</h2>
+      <p className="text-sm text-[var(--text-muted)] mb-3">Minimum 2, maximum 10 photos</p>
+
+      <div className="card p-3 mb-5 flex items-start gap-2">
+        <AlertCircle size={15} strokeWidth={2} className="text-[var(--brand-green)] flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-[var(--text-secondary)]">
+          <strong>Take live photos</strong> of your actual item — no stock images or downloaded photos.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-5 sm:grid-cols-3">
+        {form.photoPreviews.map((preview, i) => (
+          <div key={i} className="aspect-square rounded-xl overflow-hidden relative">
+            <img src={preview} alt="" className="w-full h-full object-cover" />
+            <button
+              onClick={() => removePhoto(i)}
+              className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
+            >
+              <X size={13} strokeWidth={2.5} className="text-white" />
+            </button>
+            {i === 0 && (
+              <span className="absolute bottom-1.5 left-1.5 bg-[var(--brand-green)] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                Cover
+              </span>
+            )}
+          </div>
+        ))}
+
+        {form.photoFiles.length < 10 && (
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="aspect-square rounded-xl border-2 border-dashed border-[var(--border)] flex flex-col items-center justify-center gap-1 hover:border-[var(--brand-green)] hover:bg-[var(--brand-green-light)] transition-colors"
+          >
+            {isMobile ? (
+              <Camera size={24} strokeWidth={1.5} className="text-[var(--text-muted)]" />
+            ) : (
+              <FileImage size={24} strokeWidth={1.5} className="text-[var(--text-muted)]" />
+            )}
+            <span className="text-[10px] text-[var(--text-muted)]">{isMobile ? "Take photo" : "Add photo"}</span>
+          </button>
+        )}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture={isMobile ? "environment" : undefined}
+        multiple={!isMobile}
+        className="hidden"
+        onChange={handleFiles}
+      />
+
+      <p className="text-xs text-[var(--text-muted)] mb-5 text-center">
+        Photos are watermarked with &quot;sellz.pk&quot; automatically
+      </p>
+
+      <button
+        onClick={onNext}
+        disabled={form.photoFiles.length < 2}
+        className="btn-primary w-full justify-center py-3 disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ minHeight: 48 }}
+      >
+        Continue ({form.photoFiles.length}/2 min)
+        <ChevronRight size={16} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+// ─── Step Review ──────────────────────────────────────────────────────────────
+
+function StepReview({ form, onSubmit, submitting, uploadProgress, submitError }: {
   form: FormData;
   onSubmit: () => void;
   submitting: boolean;
+  uploadProgress: string;
   submitError: string;
 }) {
   return (
@@ -431,12 +717,25 @@ function StepReview({ form, onSubmit, submitting, submitError }: {
       <p className="text-sm text-[var(--text-muted)] mb-5">Check everything before submitting</p>
 
       <div className="card p-4 mb-4">
-        {form.photos[0] && (
-          <img src={form.photos[0]} alt="" className="w-full aspect-video object-cover rounded-lg mb-3" />
+        {form.photoPreviews[0] && (
+          <img src={form.photoPreviews[0]} alt="" className="w-full aspect-video object-cover rounded-lg mb-3" />
         )}
-        <div className="flex gap-2 mb-2">
-          <span className="badge-verified"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="5" fill="#1D9E75"/><path d="M2.5 5l1.8 1.8L7.5 3.5" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>Verified</span>
-          {form.ownershipDoc && <span className="badge-owned"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1L6.2 3.6H9L6.9 5.4L7.7 8L5 6.4L2.3 8L3.1 5.4L1 3.6H3.8L5 1Z" fill="#185FA5"/></svg>Owned</span>}
+        <div className="flex gap-2 mb-2 flex-wrap">
+          <span className="badge-verified">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <circle cx="5" cy="5" r="5" fill="#1D9E75"/>
+              <path d="M2.5 5l1.8 1.8L7.5 3.5" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Verified
+          </span>
+          {form.ownershipDocPreview && (
+            <span className="badge-owned">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M5 1L6.2 3.6H9L6.9 5.4L7.7 8L5 6.4L2.3 8L3.1 5.4L1 3.6H3.8L5 1Z" fill="#185FA5"/>
+              </svg>
+              Owned
+            </span>
+          )}
         </div>
         <p className="text-lg font-bold text-[var(--text-primary)] mb-1">
           {form.price ? `Rs ${Number(form.price).toLocaleString()}` : "—"}
@@ -447,15 +746,19 @@ function StepReview({ form, onSubmit, submitting, submitError }: {
             {form.condition}
           </span>
         )}
+        {form.city && (
+          <p className="text-xs text-[var(--text-muted)] mt-1.5">{[form.city, form.area].filter(Boolean).join(", ")}</p>
+        )}
         {form.description && (
           <p className="text-xs text-[var(--text-muted)] mt-2 line-clamp-3">{form.description}</p>
         )}
+        <p className="text-xs text-[var(--text-muted)] mt-2">{form.photoPreviews.length} photo{form.photoPreviews.length !== 1 ? "s" : ""}</p>
       </div>
 
       <div className="card p-4 mb-5 flex items-start gap-2">
         <AlertCircle size={15} strokeWidth={2} className="text-[var(--brand-green)] flex-shrink-0 mt-0.5" />
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          By submitting, you confirm this is an accurate listing and you are the owner or authorized seller. Fake listings result in permanent CNIC-level bans.
+          By submitting you confirm this is an accurate listing and you are the owner. Fake listings result in permanent CNIC-level bans.
         </p>
       </div>
 
@@ -463,100 +766,19 @@ function StepReview({ form, onSubmit, submitting, submitError }: {
         <p className="text-xs font-medium mb-3 text-center" style={{ color: "var(--danger)" }}>{submitError}</p>
       )}
 
-      <button onClick={onSubmit} disabled={submitting} className="btn-primary w-full justify-center py-3 disabled:opacity-60">
+      {uploadProgress && (
+        <p className="text-xs font-medium mb-3 text-center text-[var(--brand-green)]">{uploadProgress}</p>
+      )}
+
+      <button
+        onClick={onSubmit}
+        disabled={submitting}
+        className="btn-primary w-full justify-center py-3 disabled:opacity-60"
+        style={{ minHeight: 48 }}
+      >
         {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={2.5} />}
-        {submitting ? "Submitting..." : "Submit for Review"}
+        {submitting ? (uploadProgress || "Submitting...") : "Submit for Review"}
       </button>
-    </div>
-  );
-}
-
-function StepWhatsapp({ onDone }: { onDone: (added: boolean, waNumber?: string) => void }) {
-  const [number, setNumber] = useState("");
-  const [chatOnly, setChatOnly] = useState(true);
-  const [error, setError] = useState("");
-
-  const valid = /^03\d{9}$/.test(number.replace(/\s/g, ""));
-
-  function save() {
-    if (!valid) { setError("Enter valid Pakistani number (03XXXXXXXXX)"); return; }
-    onDone(true, number.replace(/\s/g, ""));
-  }
-
-  return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-6" style={{ background: "var(--bg)" }}>
-      <div className="w-full max-w-sm">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-5 mx-auto" style={{ background: "rgba(37,211,102,0.12)" }}>
-          <svg viewBox="0 0 24 24" fill="#25D366" width="28" height="28">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.49" />
-          </svg>
-        </div>
-
-        <h2 className="text-xl font-bold text-center mb-1" style={{ color: "var(--text-primary)" }}>
-          Add Your WhatsApp
-        </h2>
-        <p className="text-sm text-center mb-6 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          Buyers respond faster when they can reach you on WhatsApp. Your number stays hidden until you approve it.
-        </p>
-
-        <div className="mb-4">
-          <label className="text-sm font-semibold block mb-1.5" style={{ color: "var(--text-primary)" }}>
-            WhatsApp Number
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium" style={{ color: "var(--text-muted)" }}>
-              +92
-            </span>
-            <input
-              type="tel"
-              placeholder="03XXXXXXXXX"
-              value={number}
-              onChange={e => { setNumber(e.target.value); setError(""); }}
-              className="input-base pl-12"
-              maxLength={11}
-            />
-          </div>
-          {error && <p className="text-xs mt-1" style={{ color: "var(--danger)" }}>{error}</p>}
-        </div>
-
-        <button
-          onClick={() => setChatOnly(v => !v)}
-          className="w-full flex items-center justify-between p-3.5 rounded-xl border mb-5 transition-colors"
-          style={{ borderColor: "var(--border)", background: "var(--surface)" }}
-        >
-          <div className="text-left">
-            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Show number after chat only</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Buyer must message first before seeing your number
-            </p>
-          </div>
-          <div
-            className="w-11 h-6 rounded-full flex-shrink-0 ml-3 relative transition-colors"
-            style={{ background: chatOnly ? "var(--brand-green)" : "var(--border)" }}
-          >
-            <div
-              className="absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all"
-              style={{ left: chatOnly ? "calc(100% - 20px)" : 4 }}
-            />
-          </div>
-        </button>
-
-        <button
-          onClick={save}
-          className="btn-primary w-full justify-center py-3 mb-3"
-        >
-          Save & Continue
-          <Check size={16} strokeWidth={2.5} />
-        </button>
-
-        <button
-          onClick={() => onDone(false)}
-          className="w-full py-2.5 text-sm font-medium text-center transition-colors"
-          style={{ color: "var(--text-muted)" }}
-        >
-          Skip for now
-        </button>
-      </div>
     </div>
   );
 }
