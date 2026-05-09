@@ -135,6 +135,10 @@ export default function AdminPage() {
     router.refresh();
   }
 
+  useEffect(() => {
+    if (isAdmin === false) router.replace("/admin/login");
+  }, [isAdmin, router]);
+
   const filteredUsers = adminUsers.filter(u =>
     !userSearch || (u.full_name ?? "").toLowerCase().includes(userSearch.toLowerCase()) || (u.phone ?? "").includes(userSearch)
   );
@@ -146,10 +150,6 @@ export default function AdminPage() {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (isAdmin === false) router.replace("/admin/login");
-  }, [isAdmin, router]);
 
   if (isAdmin === false) return null;
 
