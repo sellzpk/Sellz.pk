@@ -77,6 +77,7 @@ export default function AdminPage() {
   async function loadAll() {
     setLoading(true);
     setIsAdmin(true);
+    const supabase = createClient();
 
     const [{ data: ads }, { data: cnics }, { data: reps }, { count }, { data: users }] = await Promise.all([
       supabase.from("ads").select("id, title, price, city, created_at, ad_photos(url), users(full_name)").eq("status", "pending").order("created_at", { ascending: true }),
@@ -146,10 +147,11 @@ export default function AdminPage() {
     );
   }
 
-  if (isAdmin === false) {
-    router.replace("/admin/login");
-    return null;
-  }
+  useEffect(() => {
+    if (isAdmin === false) router.replace("/admin/login");
+  }, [isAdmin, router]);
+
+  if (isAdmin === false) return null;
 
   return (
     <div className="min-h-dvh flex flex-col bg-[#F0F0EE]">
