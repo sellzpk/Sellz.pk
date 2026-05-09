@@ -76,13 +76,6 @@ export default function AdminPage() {
 
   async function loadAll() {
     setLoading(true);
-    const supabase = createClient();
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setIsAdmin(false); setLoading(false); return; }
-
-    const { data: me } = await supabase.from("users").select("is_admin").eq("id", user.id).single();
-    if (!me?.is_admin) { setIsAdmin(false); setLoading(false); return; }
     setIsAdmin(true);
 
     const [{ data: ads }, { data: cnics }, { data: reps }, { count }, { data: users }] = await Promise.all([
@@ -154,13 +147,8 @@ export default function AdminPage() {
   }
 
   if (isAdmin === false) {
-    return (
-      <div className="min-h-dvh flex flex-col items-center justify-center bg-[#F0F0EE]">
-        <Shield size={40} strokeWidth={1.5} className="mb-3 text-red-400" />
-        <p className="text-base font-bold text-[var(--text-primary)]">Access Denied</p>
-        <p className="text-sm text-[var(--text-muted)]">Admin privileges required</p>
-      </div>
-    );
+    router.replace("/admin/login");
+    return null;
   }
 
   return (
