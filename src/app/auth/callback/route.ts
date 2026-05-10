@@ -5,6 +5,7 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? origin;
 
   if (code) {
     const supabase = await createClient();
@@ -24,12 +25,12 @@ export async function GET(request: Request) {
             full_name: fullName,
             email: user.email,
           });
-          return NextResponse.redirect(`${origin}/onboarding`);
+          return NextResponse.redirect(`${siteUrl}/onboarding`);
         }
       }
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${siteUrl}${next}`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/auth?error=oauth`);
+  return NextResponse.redirect(`${siteUrl}/auth?error=oauth`);
 }

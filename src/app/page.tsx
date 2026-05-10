@@ -17,11 +17,33 @@ import { Footer, FooterMobile } from "@/components/Footer";
 import { createClient } from "@/lib/supabase/client";
 import { mapAdRow, AD_SELECT } from "@/lib/supabase/helpers";
 
+function readCity(): string {
+  try {
+    const raw = localStorage.getItem("sellz_location");
+    return raw ? (JSON.parse(raw)?.city ?? "") : "";
+  } catch {
+    return "";
+  }
+}
+
 export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState("all");
+  const [filterCity, setFilterCity] = useState("");
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Read saved location on mount + listen for location changes
+  useEffect(() => {
+    setFilterCity(readCity());
+
+    function onLocationChange() {
+      setFilterCity(readCity());
+    }
+    window.addEventListener("sellz:location", onLocationChange);
+    return () => window.removeEventListener("sellz:location", onLocationChange);
+  }, []);
+
+  // Fetch ads when category or city filter changes
   useEffect(() => {
     async function fetchAds() {
       setLoading(true);
@@ -33,20 +55,16 @@ export default function HomePage() {
         .order("created_at", { ascending: false })
         .limit(60);
 
-      if (activeCategory !== "all") {
-        query.eq("category", activeCategory);
-      }
+      if (activeCategory !== "all") query.eq("category", activeCategory);
+      if (filterCity) query.eq("city", filterCity);
 
       const { data, error } = await query;
-      if (!error && data) {
-        setAds(data.map(mapAdRow));
-      } else {
-        setAds([]);
-      }
+      if (!error && data) setAds(data.map(mapAdRow));
+      else setAds([]);
       setLoading(false);
     }
     fetchAds();
-  }, [activeCategory]);
+  }, [activeCategory, filterCity]);
 
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
@@ -55,7 +73,7 @@ export default function HomePage() {
       <main className="flex-1 pb-24 md:pb-8">
         {/* Mobile hero search */}
         <div className="md:hidden px-4 pt-4 pb-3 bg-white border-b border-[var(--border)]">
-          <SearchBar city="Karachi" large />
+          <SearchBar city={filterCity} large />
         </div>
 
         {/* Trust bar */}
@@ -105,7 +123,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 style={{ fontSize: 16, fontWeight: 500, color: "#1A1A1A" }}>
                 {activeCategory === "all"
-                  ? "Latest Listings"
+                  ? filterCity ? `Latest in ${filterCity}` : "Latest Listings"
                   : CATEGORY_TABS.find(c => c.slug === activeCategory)?.label}
               </h2>
               {!loading && (
@@ -114,10 +132,11 @@ export default function HomePage() {
             </div>
 
             {loading ? (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 md:gap-3 md:grid-cols-3 lg:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="card overflow-hidden animate-pulse">
-                    <div style={{ height: 200, background: "#F0F0EE" }} />
+                    <div style={{ height: 140, background: "#F0F0EE" }} className="md:hidden" />
+                    <div style={{ height: 200, background: "#F0F0EE" }} className="hidden md:block" />
                     <div className="p-3 space-y-2">
                       <div className="h-4 rounded" style={{ background: "#F0F0EE", width: "60%" }} />
                       <div className="h-3 rounded" style={{ background: "#F0F0EE", width: "90%" }} />
@@ -127,7 +146,7 @@ export default function HomePage() {
                 ))}
               </div>
             ) : ads.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" style={{ alignItems: "stretch" }}>
+              <div className="grid grid-cols-2 gap-2 md:gap-3 md:grid-cols-3 lg:grid-cols-4" style={{ alignItems: "stretch" }}>
                 {ads.map(ad => <AdCard key={ad.id} ad={ad} />)}
               </div>
             ) : (
@@ -136,7 +155,9 @@ export default function HomePage() {
                   <Inbox size={32} strokeWidth={1.5} style={{ color: "var(--brand-green)" }} />
                 </div>
                 <p className="text-base font-semibold mb-1" style={{ color: "var(--text-primary)" }}>No listings yet</p>
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>Be the first to post in this category</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  {filterCity ? `No ads in ${filterCity} yet` : "Be the first to post in this category"}
+                </p>
               </div>
             )}
           </section>
