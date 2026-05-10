@@ -70,7 +70,18 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
       };
       support_tickets: {
-        Row: { id: number; user_id: string; type: string | null; message: string; status: string; created_at: string };
+        Row: {
+          id: number;
+          user_id: string | null;
+          type: string | null;
+          name: string | null;
+          email: string | null;
+          subject: string | null;
+          message: string;
+          metadata: Record<string, unknown> | null;
+          status: string;
+          created_at: string;
+        };
         Insert: Omit<Database["public"]["Tables"]["support_tickets"]["Row"], "id" | "created_at" | "status">;
         Update: Partial<Database["public"]["Tables"]["support_tickets"]["Insert"]>;
       };
