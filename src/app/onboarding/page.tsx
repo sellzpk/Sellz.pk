@@ -326,16 +326,22 @@ export default function OnboardingPage() {
               <div className="space-y-4 mb-6">
                 <CnicCapture
                   label="CNIC Front"
+                  type="cnic-front"
+                  userId={userId}
                   value={cnicFront}
                   onCapture={setCnicFront}
                 />
                 <CnicCapture
                   label="CNIC Back"
+                  type="cnic-back"
+                  userId={userId}
                   value={cnicBack}
                   onCapture={setCnicBack}
                 />
                 <CnicCapture
                   label="Selfie"
+                  type="selfie"
+                  userId={userId}
                   value={selfie}
                   onCapture={setSelfie}
                   circle
@@ -380,51 +386,109 @@ export default function OnboardingPage() {
 }
 
 function CnicCapture({
-  label, value, onCapture, circle = false,
+  label, type, userId, value, onCapture, circle = false,
 }: {
   label: string;
+  type: string;
+  userId: string | null;
   value: string;
-  onCapture: (url: string) => void;
+  onCapture: (path: string) => void;
   circle?: boolean;
 }) {
+  const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(!!value);
+  const [uploadError, setUploadError] = useState(false);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setUploading(false); return; }
+    if (!file || !userId) return;
 
-    const ext = file.name.split(".").pop();
-    const path = `${user.id}/${label.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("cnic-documents").upload(path, file, { upsert: true });
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage.from("cnic-documents").getPublicUrl(path);
-      onCapture(publicUrl);
+    // Show preview immediately from local file
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setUploaded(false);
+    setUploadError(false);
+    setUploading(true);
+
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/${type}-${Date.now()}.${ext}`;
+      const supabase = createClient();
+      const { error } = await supabase.storage
+        .from("cnic-documents")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      onCapture(path); // store path, not URL
+      setUploaded(true);
+    } catch {
+      setUploadError(true);
+      setPreview(null);
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }
+
+  const borderColor = uploadError
+    ? "#e53e3e"
+    : uploaded || preview
+    ? "var(--brand-green)"
+    : "var(--border)";
 
   return (
     <div>
       <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>{label}</p>
-      <label className={`block cursor-pointer border-2 border-dashed rounded-xl overflow-hidden transition-colors ${value ? "border-[var(--brand-green)]" : "border-[var(--border)] hover:border-[var(--brand-green)]"}`}
-        style={{ aspectRatio: circle ? "1" : "16/7", maxWidth: circle ? 160 : undefined, margin: circle ? "0 auto" : undefined, borderRadius: circle ? 9999 : undefined }}>
+      <label
+        className="block cursor-pointer"
+        style={{ maxWidth: circle ? 160 : undefined, margin: circle ? "0 auto" : undefined, display: "block" }}
+      >
         <input type="file" accept="image/*" capture="environment" onChange={handleFile} className="sr-only" />
-        {value ? (
-          <img src={value} alt={label} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-[var(--bg)]">
-            {uploading
-              ? <Loader2 size={24} strokeWidth={1.5} className="animate-spin" style={{ color: "var(--brand-green)" }} />
-              : <Camera size={24} strokeWidth={1.5} style={{ color: "var(--text-muted)" }} />
-            }
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{uploading ? "Uploading..." : "Tap to capture / upload"}</span>
-          </div>
-        )}
+        <div
+          className="relative border-2 border-dashed overflow-hidden transition-colors"
+          style={{
+            aspectRatio: circle ? "1" : "16/7",
+            borderRadius: circle ? 9999 : 12,
+            borderColor,
+            minHeight: circle ? 120 : 100,
+          }}
+        >
+          {preview ? (
+            <>
+              <img src={preview} alt={label} className="w-full h-full object-cover" />
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.45)" }}>
+                  <Loader2 size={28} strokeWidth={2} className="animate-spin text-white" />
+                </div>
+              )}
+              {uploaded && !uploading && (
+                <div className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center" style={{ background: "var(--brand-green)" }}>
+                  <Check size={13} strokeWidth={2.5} className="text-white" />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2" style={{ background: "var(--bg)" }}>
+              {uploaded ? (
+                <>
+                  <Check size={24} strokeWidth={2} style={{ color: "var(--brand-green)" }} />
+                  <span className="text-xs font-medium" style={{ color: "var(--brand-green)" }}>Uploaded ✓</span>
+                  <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>Tap to replace</span>
+                </>
+              ) : (
+                <>
+                  <Camera size={24} strokeWidth={1.5} style={{ color: "var(--text-muted)" }} />
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>Tap to capture / upload</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </label>
+      {uploadError && (
+        <p className="text-xs mt-1.5 font-medium" style={{ color: "#e53e3e" }}>
+          Upload failed — tap to try again
+        </p>
+      )}
     </div>
   );
 }

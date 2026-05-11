@@ -30,6 +30,9 @@ type CnicUser = {
   cnic_back_url: string | null;
   selfie_url: string | null;
   created_at: string;
+  cnic_front_signed?: string | null;
+  cnic_back_signed?: string | null;
+  selfie_signed?: string | null;
 };
 
 type Report = {
@@ -48,6 +51,21 @@ type AdminUser = {
   created_at: string;
   is_admin: boolean;
 };
+
+async function toSignedUrl(
+  supabase: ReturnType<typeof createClient>,
+  raw: string | null
+): Promise<string | null> {
+  if (!raw) return null;
+  // handle both stored path ("uuid/file.jpg") and legacy full URL
+  const path = raw.includes("cnic-documents/")
+    ? raw.split("cnic-documents/")[1].split("?")[0]
+    : raw;
+  const { data } = await supabase.storage
+    .from("cnic-documents")
+    .createSignedUrl(path, 60 * 60); // 1 hour
+  return data?.signedUrl ?? null;
+}
 
 function relTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -88,7 +106,18 @@ export default function AdminPage() {
     ]);
 
     setPendingAds((ads as unknown as PendingAd[]) ?? []);
-    setCnicQueue((cnics as CnicUser[]) ?? []);
+
+    const cnicsRaw = (cnics as CnicUser[]) ?? [];
+    const cnicsWithUrls = await Promise.all(
+      cnicsRaw.map(async (u) => ({
+        ...u,
+        cnic_front_signed: await toSignedUrl(supabase, u.cnic_front_url),
+        cnic_back_signed: await toSignedUrl(supabase, u.cnic_back_url),
+        selfie_signed: await toSignedUrl(supabase, u.selfie_url),
+      }))
+    );
+    setCnicQueue(cnicsWithUrls);
+
     setReports((reps as unknown as Report[]) ?? []);
     setTotalUsers(count ?? 0);
     setAdminUsers((users as AdminUser[]) ?? []);
@@ -385,13 +414,18 @@ export default function AdminPage() {
 
                         <div className="grid grid-cols-3 gap-2 mb-3">
                           {[
-                            { label: "CNIC Front", url: item.cnic_front_url, icon: <CreditCard size={20} strokeWidth={1.5} /> },
-                            { label: "CNIC Back", url: item.cnic_back_url, icon: <CreditCard size={20} strokeWidth={1.5} /> },
-                            { label: "Selfie", url: item.selfie_url, icon: <ScanFace size={20} strokeWidth={1.5} /> },
+                            { label: "CNIC Front", url: item.cnic_front_signed, icon: <CreditCard size={20} strokeWidth={1.5} /> },
+                            { label: "CNIC Back", url: item.cnic_back_signed, icon: <CreditCard size={20} strokeWidth={1.5} /> },
+                            { label: "Selfie", url: item.selfie_signed, icon: <ScanFace size={20} strokeWidth={1.5} /> },
                           ].map(({ label, url, icon }) => (
                             <div key={label} className="aspect-video bg-[var(--bg)] rounded-lg border border-[var(--border)] overflow-hidden flex flex-col items-center justify-center gap-1">
                               {url ? (
-                                <img src={url} alt={label} className="w-full h-full object-cover" />
+                                <img
+                                  src={url}
+                                  alt={label}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                />
                               ) : (
                                 <>
                                   <span className="text-[var(--text-muted)]">{icon}</span>
