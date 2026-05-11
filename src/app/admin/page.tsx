@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   CheckCircle, XCircle, Clock, Users, FileText, Flag,
   Search, ChevronRight, Eye, AlertTriangle, MapPin, Shield,
-  Camera, CreditCard, ScanFace, Loader2, LogOut,
+  Camera, CreditCard, ScanFace, Loader2, LogOut, X, Ban,
+  ShieldCheck, ShieldOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -50,6 +51,28 @@ type AdminUser = {
   city: string | null;
   created_at: string;
   is_admin: boolean;
+  cnic_verified: boolean;
+  banned: boolean;
+};
+
+type UserDetail = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  city: string | null;
+  created_at: string;
+  is_admin: boolean;
+  cnic_verified: boolean;
+  cnic_front_url: string | null;
+  cnic_back_url: string | null;
+  selfie_url: string | null;
+  cnic_front_signed: string | null;
+  cnic_back_signed: string | null;
+  selfie_signed: string | null;
+  banned: boolean;
+  ban_reason: string | null;
+  banned_at: string | null;
+  ad_count: number;
 };
 
 function relTime(iso: string) {
@@ -75,6 +98,10 @@ export default function AdminPage() {
   const [userSearch, setUserSearch] = useState("");
   const [actioning, setActioning] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [banReason, setBanReason] = useState("");
+  const [showBanInput, setShowBanInput] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -87,7 +114,7 @@ export default function AdminPage() {
       supabase.from("ads").select("id, title, price, city, created_at, ad_photos(url), users(full_name)").eq("status", "pending").order("created_at", { ascending: true }),
       supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
       supabase.from("users").select("id", { count: "exact", head: true }),
-      supabase.from("users").select("id, full_name, phone, city, created_at, is_admin").order("created_at", { ascending: false }).limit(50),
+      supabase.from("users").select("id, full_name, phone, city, created_at, is_admin, cnic_verified, banned").order("created_at", { ascending: false }).limit(50),
       fetch("/api/admin/cnic-queue").then(r => r.json()),
     ]);
 
@@ -97,6 +124,41 @@ export default function AdminPage() {
     setTotalUsers(count ?? 0);
     setAdminUsers((users as AdminUser[]) ?? []);
     setLoading(false);
+  }
+
+  async function loadUserDetail(userId: string) {
+    setLoadingDetail(true);
+    setShowBanInput(false);
+    setBanReason("");
+    const res = await fetch(`/api/admin/user-detail?userId=${userId}`);
+    const data = await res.json();
+    setSelectedUser(data as UserDetail);
+    setLoadingDetail(false);
+  }
+
+  async function doUserAction(userId: string, action: "verify" | "reject" | "ban") {
+    setActioning(`${action}-${userId}`);
+    const res = await fetch("/api/admin/verify-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, action, banReason: action === "ban" ? banReason : undefined }),
+    });
+    if (!res.ok) { setActioning(null); return; }
+
+    if (action === "verify") {
+      setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, cnic_verified: true } : u));
+      setCnicQueue(prev => prev.filter(u => u.id !== userId));
+      if (selectedUser?.id === userId) setSelectedUser(d => d ? { ...d, cnic_verified: true } : d);
+    } else if (action === "reject") {
+      setCnicQueue(prev => prev.filter(u => u.id !== userId));
+      if (selectedUser?.id === userId) setSelectedUser(d => d ? { ...d, cnic_front_url: null, cnic_back_url: null, selfie_url: null, cnic_front_signed: null, cnic_back_signed: null, selfie_signed: null } : d);
+    } else if (action === "ban") {
+      setAdminUsers(prev => prev.map(u => u.id === userId ? { ...u, banned: true } : u));
+      if (selectedUser?.id === userId) setSelectedUser(d => d ? { ...d, banned: true } : d);
+      setShowBanInput(false);
+      setBanReason("");
+    }
+    setActioning(null);
   }
 
   async function approveAd(id: number) {
@@ -398,11 +460,7 @@ export default function AdminPage() {
                               key={label}
                               onClick={() => url && setLightboxUrl(url)}
                               className="relative rounded-lg border border-[var(--border)] overflow-hidden flex flex-col items-center justify-center gap-1"
-                              style={{
-                                height: 120,
-                                background: "var(--bg)",
-                                cursor: url ? "pointer" : "default",
-                              }}
+                              style={{ height: 120, background: "var(--bg)", cursor: url ? "pointer" : "default" }}
                             >
                               {url ? (
                                 <>
@@ -412,9 +470,7 @@ export default function AdminPage() {
                                     className="w-full h-full object-cover"
                                     onError={(e) => { (e.currentTarget.parentElement as HTMLElement).innerHTML = `<span style="color:#999;font-size:11px;padding:8px;text-align:center">${label}<br/>Load error</span>`; }}
                                   />
-                                  <span className="absolute bottom-1 right-1 text-[10px] text-white bg-black/50 px-1.5 py-0.5 rounded">
-                                    expand
-                                  </span>
+                                  <span className="absolute bottom-1 right-1 text-[10px] text-white bg-black/50 px-1.5 py-0.5 rounded">expand</span>
                                 </>
                               ) : (
                                 <>
@@ -470,22 +526,32 @@ export default function AdminPage() {
                   <p className="text-sm text-[var(--text-muted)] text-center py-8">No users found</p>
                 ) : (
                   filteredUsers.map((user, i) => (
-                    <div key={user.id} className={`flex items-center gap-3 p-4 ${i > 0 ? "border-t border-[var(--border)]" : ""}`}>
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                        style={{ background: user.is_admin ? "#7c3aed" : "var(--brand-green)" }}>
+                    <button
+                      key={user.id}
+                      onClick={() => loadUserDetail(user.id)}
+                      className={`w-full flex items-center gap-3 p-4 hover:bg-[var(--bg)] transition-colors text-left ${i > 0 ? "border-t border-[var(--border)]" : ""}`}
+                    >
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                        style={{ background: user.banned ? "#dc2626" : user.is_admin ? "#7c3aed" : "var(--brand-green)" }}>
                         {(user.full_name ?? "U")[0].toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-[var(--text-primary)]">{user.full_name ?? "—"}</p>
                         <p className="text-xs text-[var(--text-muted)]">{user.phone ?? "—"} · {user.city ?? "—"}</p>
                       </div>
-                      {user.is_admin && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-50 text-purple-600">Admin</span>
-                      )}
-                      <button className="p-1.5 text-[var(--text-muted)] hover:text-[var(--brand-green)]">
-                        <ChevronRight size={16} strokeWidth={2} />
-                      </button>
-                    </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {user.banned && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Banned</span>
+                        )}
+                        {user.cnic_verified && !user.banned && (
+                          <ShieldCheck size={14} strokeWidth={2} style={{ color: "var(--brand-green)" }} />
+                        )}
+                        {user.is_admin && !user.banned && (
+                          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-50 text-purple-600">Admin</span>
+                        )}
+                        <ChevronRight size={16} strokeWidth={2} className="text-[var(--text-muted)]" />
+                      </div>
+                    </button>
                   ))
                 )}
               </div>
@@ -546,50 +612,194 @@ export default function AdminPage() {
     {lightboxUrl && (
       <div
         onClick={() => setLightboxUrl(null)}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.92)",
-          zIndex: 9999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "zoom-out",
-        }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}
       >
         <img
           src={lightboxUrl}
-          alt="CNIC document"
+          alt="Document"
           onClick={(e) => e.stopPropagation()}
-          style={{
-            maxWidth: "90vw",
-            maxHeight: "90vh",
-            objectFit: "contain",
-            borderRadius: 8,
-            boxShadow: "0 4px 40px rgba(0,0,0,0.6)",
-          }}
+          style={{ maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 40px rgba(0,0,0,0.6)" }}
         />
         <button
           onClick={() => setLightboxUrl(null)}
-          style={{
-            position: "absolute",
-            top: 20,
-            right: 20,
-            background: "white",
-            border: "none",
-            borderRadius: "50%",
-            width: 36,
-            height: 36,
-            cursor: "pointer",
-            fontSize: 18,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-          }}
+          style={{ position: "absolute", top: 20, right: 20, background: "white", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}
         >
           ✕
         </button>
+      </div>
+    )}
+
+    {/* User detail modal */}
+    {(selectedUser || loadingDetail) && (
+      <div
+        onClick={() => { setSelectedUser(null); setShowBanInput(false); setBanReason(""); }}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+        className="md:items-center"
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          className="bg-white w-full max-w-lg rounded-t-2xl md:rounded-2xl overflow-hidden"
+          style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+        >
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
+            <h2 className="text-base font-bold text-[var(--text-primary)]">User Detail</h2>
+            <button
+              onClick={() => { setSelectedUser(null); setShowBanInput(false); setBanReason(""); }}
+              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[var(--bg)] transition-colors"
+            >
+              <X size={16} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          {loadingDetail ? (
+            <div className="flex-1 flex items-center justify-center py-16">
+              <Loader2 size={28} className="animate-spin" style={{ color: "var(--brand-green)" }} />
+            </div>
+          ) : selectedUser && (
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              {/* User info */}
+              <div className="flex items-start gap-3">
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white flex-shrink-0"
+                  style={{ background: selectedUser.banned ? "#dc2626" : selectedUser.is_admin ? "#7c3aed" : "var(--brand-green)" }}
+                >
+                  {(selectedUser.full_name ?? "U")[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-base font-bold text-[var(--text-primary)]">{selectedUser.full_name ?? "Unknown"}</p>
+                    {selectedUser.cnic_verified && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--brand-green-light)] text-[var(--brand-green)]">
+                        <ShieldCheck size={10} /> Verified
+                      </span>
+                    )}
+                    {selectedUser.banned && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Banned</span>
+                    )}
+                    {selectedUser.is_admin && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600">Admin</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{selectedUser.phone ?? "—"} · {selectedUser.city ?? "—"}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {selectedUser.ad_count} ads · Joined {new Date(selectedUser.created_at).toLocaleDateString("en-PK", { month: "short", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              {selectedUser.banned && selectedUser.ban_reason && (
+                <div className="rounded-lg bg-red-50 border border-red-100 p-3">
+                  <p className="text-xs font-semibold text-red-700 mb-0.5">Ban reason</p>
+                  <p className="text-xs text-red-600">{selectedUser.ban_reason}</p>
+                </div>
+              )}
+
+              {/* CNIC images */}
+              {(selectedUser.cnic_front_signed || selectedUser.cnic_back_signed || selectedUser.selfie_signed) && (
+                <div>
+                  <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wide">CNIC Documents</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Front", url: selectedUser.cnic_front_signed, icon: <CreditCard size={18} strokeWidth={1.5} /> },
+                      { label: "Back", url: selectedUser.cnic_back_signed, icon: <CreditCard size={18} strokeWidth={1.5} /> },
+                      { label: "Selfie", url: selectedUser.selfie_signed, icon: <ScanFace size={18} strokeWidth={1.5} /> },
+                    ].map(({ label, url, icon }) => (
+                      <div
+                        key={label}
+                        onClick={() => url && setLightboxUrl(url)}
+                        className="relative rounded-lg border border-[var(--border)] overflow-hidden flex items-center justify-center"
+                        style={{ height: 100, background: "var(--bg)", cursor: url ? "pointer" : "default" }}
+                      >
+                        {url ? (
+                          <>
+                            <img src={url} alt={label} className="w-full h-full object-cover" />
+                            <span className="absolute bottom-1 right-1 text-[10px] text-white bg-black/50 px-1 py-0.5 rounded">{label}</span>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center gap-1 text-[var(--text-muted)]">
+                            {icon}
+                            <span className="text-[10px]">{label}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!selectedUser.cnic_front_signed && !selectedUser.cnic_back_signed && !selectedUser.selfie_signed && (
+                <div className="rounded-lg bg-[var(--bg)] border border-[var(--border)] p-4 flex items-center gap-3">
+                  <ShieldOff size={20} className="text-[var(--text-muted)]" />
+                  <p className="text-xs text-[var(--text-muted)]">No CNIC documents submitted</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="space-y-2 pt-2 border-t border-[var(--border)]">
+                {!selectedUser.cnic_verified && (selectedUser.cnic_front_signed || selectedUser.cnic_back_signed) && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => doUserAction(selectedUser.id, "verify")}
+                      disabled={!!actioning}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {actioning === `verify-${selectedUser.id}` ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} strokeWidth={2} />}
+                      Verify CNIC
+                    </button>
+                    <button
+                      onClick={() => doUserAction(selectedUser.id, "reject")}
+                      disabled={!!actioning}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      <XCircle size={15} strokeWidth={2} /> Reject CNIC
+                    </button>
+                  </div>
+                )}
+
+                {!selectedUser.banned && (
+                  <>
+                    {showBanInput ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Ban reason (required)"
+                          value={banReason}
+                          onChange={e => setBanReason(e.target.value)}
+                          className="input-base text-sm"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setShowBanInput(false); setBanReason(""); }}
+                            className="flex-1 py-2.5 rounded-lg border border-[var(--border)] text-sm font-medium text-[var(--text-secondary)]"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => doUserAction(selectedUser.id, "ban")}
+                            disabled={!banReason.trim() || !!actioning}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                          >
+                            {actioning === `ban-${selectedUser.id}` ? <Loader2 size={15} className="animate-spin" /> : <Ban size={15} strokeWidth={2} />}
+                            Confirm Ban
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowBanInput(true)}
+                        className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50 transition-colors"
+                      >
+                        <Ban size={15} strokeWidth={2} /> Ban User
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     )}
     </>

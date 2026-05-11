@@ -8,7 +8,7 @@ import { BadgeVerified } from "@/components/BadgeVerified";
 import { AdCard } from "@/components/AdCard";
 import type { Ad } from "@/components/AdCard";
 import { Footer, FooterMobile } from "@/components/Footer";
-import { MapPin, Calendar, ArrowLeft, Loader2 } from "lucide-react";
+import { MapPin, Calendar, ArrowLeft, Loader2, ShieldCheck, ShieldOff, Clock } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRow, ReviewRow } from "@/lib/types";
@@ -167,6 +167,48 @@ export default function ProfilePage() {
               <Stat value={String(ads.length)} label="Active Ads" />
               <Stat value={String(reviews.length)} label="Reviews" />
               <Stat value={profile.cnic_verified ? "Verified" : "Unverified"} label="Identity" />
+            </div>
+          </div>
+
+          {/* Verification status card */}
+          <div className="card p-4 mb-4">
+            <div className="flex items-center gap-3">
+              {profile.cnic_verified ? (
+                <>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--brand-green-light)" }}>
+                    <ShieldCheck size={20} strokeWidth={2} style={{ color: "var(--brand-green)" }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">Identity Verified</p>
+                    <p className="text-xs text-[var(--text-muted)]">CNIC verified by Sellz.pk team</p>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: "var(--brand-green-light)", color: "var(--brand-green)" }}>
+                    VERIFIED
+                  </span>
+                </>
+              ) : profile.cnic_front_url ? (
+                <>
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                    <Clock size={20} strokeWidth={2} className="text-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">Verification Pending</p>
+                    <p className="text-xs text-[var(--text-muted)]">CNIC submitted, under review</p>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 flex-shrink-0">PENDING</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "var(--bg)" }}>
+                    <ShieldOff size={20} strokeWidth={2} className="text-[var(--text-muted)]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[var(--text-primary)]">Not Verified</p>
+                    <p className="text-xs text-[var(--text-muted)]">CNIC not submitted yet</p>
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-[var(--bg)] text-[var(--text-muted)] flex-shrink-0">UNVERIFIED</span>
+                </>
+              )}
             </div>
           </div>
 

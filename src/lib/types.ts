@@ -18,9 +18,12 @@ export interface Database {
           whatsapp_chat_only: boolean;
           google_id: string | null;
           is_admin: boolean;
+          banned: boolean;
+          banned_at: string | null;
+          ban_reason: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["users"]["Row"], "created_at" | "cnic_verified" | "is_admin" | "whatsapp_chat_only"> & Partial<Pick<Database["public"]["Tables"]["users"]["Row"], "cnic_verified" | "is_admin" | "whatsapp_chat_only">>;
+        Insert: Omit<Database["public"]["Tables"]["users"]["Row"], "created_at" | "cnic_verified" | "is_admin" | "whatsapp_chat_only" | "banned" | "banned_at" | "ban_reason"> & Partial<Pick<Database["public"]["Tables"]["users"]["Row"], "cnic_verified" | "is_admin" | "whatsapp_chat_only" | "banned" | "banned_at" | "ban_reason">>;
         Update: Partial<Database["public"]["Tables"]["users"]["Insert"]>;
       };
       ads: {
