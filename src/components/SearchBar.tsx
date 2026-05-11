@@ -34,9 +34,9 @@ export function SearchBar({ city = "Karachi", large = false, defaultValue = "" }
           style={{ fontSize: large ? 16 : 14 }}
         />
       </div>
-      <div className="flex items-center gap-1.5 px-3 py-2.5 border-t border-b border-[var(--border)] bg-white text-xs font-medium text-[var(--text-secondary)] border-x-0">
+      <div className="hidden sm:flex items-center gap-1.5 px-3 py-2.5 border-t border-b border-[var(--border)] bg-white text-xs font-medium text-[var(--text-secondary)] border-x-0 flex-shrink-0">
         <MapPin size={13} strokeWidth={2} className="text-[var(--brand-green)]" />
-        <span>{city}</span>
+        <span className="whitespace-nowrap max-w-[80px] truncate">{city || "All Cities"}</span>
       </div>
       <button
         type="submit"

@@ -77,21 +77,21 @@ export default function HomePage() {
         </div>
 
         {/* Trust bar */}
-        <div className="bg-white" style={{ borderBottom: "1px solid #F0F0EE" }}>
-          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-5 overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-1.5 whitespace-nowrap">
+        <div className="bg-white" style={{ borderBottom: "1px solid #F0F0EE", overflow: "hidden" }}>
+          <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-4">
+            <div className="flex items-center gap-1.5 whitespace-nowrap flex-shrink-0">
               <ShieldCheck size={14} strokeWidth={2} style={{ color: "#1D9E75", flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>CNIC-Verified Sellers Only</span>
+              <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>CNIC-Verified Sellers</span>
             </div>
-            <div style={{ width: 1, height: 14, background: "#E8E8E4", flexShrink: 0 }} />
-            <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="hidden sm:block flex-shrink-0" style={{ width: 1, height: 14, background: "#E8E8E4" }} />
+            <div className="hidden sm:flex items-center gap-1.5 whitespace-nowrap flex-shrink-0">
               <Ban size={14} strokeWidth={2} style={{ color: "#1D9E75", flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>No Paid Bumps — Newest First</span>
+              <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>No Paid Bumps</span>
             </div>
-            <div style={{ width: 1, height: 14, background: "#E8E8E4", flexShrink: 0 }} />
-            <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="flex-shrink-0 ml-auto sm:ml-0" style={{ width: 1, height: 14, background: "#E8E8E4" }} />
+            <div className="flex items-center gap-1.5 whitespace-nowrap flex-shrink-0">
               <UserCheck size={14} strokeWidth={2} style={{ color: "#1D9E75", flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>Individuals Only — No Shops</span>
+              <span style={{ fontSize: 12, color: "#444", fontWeight: 500 }}>Individuals Only</span>
             </div>
           </div>
         </div>
