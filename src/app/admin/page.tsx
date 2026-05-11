@@ -52,21 +52,6 @@ type AdminUser = {
   is_admin: boolean;
 };
 
-async function toSignedUrl(
-  supabase: ReturnType<typeof createClient>,
-  raw: string | null
-): Promise<string | null> {
-  if (!raw) return null;
-  // handle both stored path ("uuid/file.jpg") and legacy full URL
-  const path = raw.includes("cnic-documents/")
-    ? raw.split("cnic-documents/")[1].split("?")[0]
-    : raw;
-  const { data } = await supabase.storage
-    .from("cnic-documents")
-    .createSignedUrl(path, 60 * 60); // 1 hour
-  return data?.signedUrl ?? null;
-}
-
 function relTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -89,6 +74,7 @@ export default function AdminPage() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [userSearch, setUserSearch] = useState("");
   const [actioning, setActioning] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -97,27 +83,16 @@ export default function AdminPage() {
     setIsAdmin(true);
     const supabase = createClient();
 
-    const [{ data: ads }, { data: cnics }, { data: reps }, { count }, { data: users }] = await Promise.all([
+    const [{ data: ads }, { data: reps }, { count }, { data: users }, cnicsRes] = await Promise.all([
       supabase.from("ads").select("id, title, price, city, created_at, ad_photos(url), users(full_name)").eq("status", "pending").order("created_at", { ascending: true }),
-      supabase.from("users").select("id, full_name, phone, city, cnic_front_url, cnic_back_url, selfie_url, created_at").eq("cnic_verified", false).not("cnic_front_url", "is", null),
       supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
       supabase.from("users").select("id", { count: "exact", head: true }),
       supabase.from("users").select("id, full_name, phone, city, created_at, is_admin").order("created_at", { ascending: false }).limit(50),
+      fetch("/api/admin/cnic-queue").then(r => r.json()),
     ]);
 
     setPendingAds((ads as unknown as PendingAd[]) ?? []);
-
-    const cnicsRaw = (cnics as CnicUser[]) ?? [];
-    const cnicsWithUrls = await Promise.all(
-      cnicsRaw.map(async (u) => ({
-        ...u,
-        cnic_front_signed: await toSignedUrl(supabase, u.cnic_front_url),
-        cnic_back_signed: await toSignedUrl(supabase, u.cnic_back_url),
-        selfie_signed: await toSignedUrl(supabase, u.selfie_url),
-      }))
-    );
-    setCnicQueue(cnicsWithUrls);
-
+    setCnicQueue(Array.isArray(cnicsRes) ? cnicsRes : []);
     setReports((reps as unknown as Report[]) ?? []);
     setTotalUsers(count ?? 0);
     setAdminUsers((users as AdminUser[]) ?? []);
@@ -183,6 +158,7 @@ export default function AdminPage() {
   if (isAdmin === false) return null;
 
   return (
+    <>
     <div className="min-h-dvh flex flex-col bg-[#F0F0EE]">
       <header className="bg-[#1a1a1a] text-white px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -418,14 +394,28 @@ export default function AdminPage() {
                             { label: "CNIC Back", url: item.cnic_back_signed, icon: <CreditCard size={20} strokeWidth={1.5} /> },
                             { label: "Selfie", url: item.selfie_signed, icon: <ScanFace size={20} strokeWidth={1.5} /> },
                           ].map(({ label, url, icon }) => (
-                            <div key={label} className="aspect-video bg-[var(--bg)] rounded-lg border border-[var(--border)] overflow-hidden flex flex-col items-center justify-center gap-1">
+                            <div
+                              key={label}
+                              onClick={() => url && setLightboxUrl(url)}
+                              className="relative rounded-lg border border-[var(--border)] overflow-hidden flex flex-col items-center justify-center gap-1"
+                              style={{
+                                height: 120,
+                                background: "var(--bg)",
+                                cursor: url ? "pointer" : "default",
+                              }}
+                            >
                               {url ? (
-                                <img
-                                  src={url}
-                                  alt={label}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => { e.currentTarget.style.display = "none"; }}
-                                />
+                                <>
+                                  <img
+                                    src={url}
+                                    alt={label}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => { (e.currentTarget.parentElement as HTMLElement).innerHTML = `<span style="color:#999;font-size:11px;padding:8px;text-align:center">${label}<br/>Load error</span>`; }}
+                                  />
+                                  <span className="absolute bottom-1 right-1 text-[10px] text-white bg-black/50 px-1.5 py-0.5 rounded">
+                                    expand
+                                  </span>
+                                </>
                               ) : (
                                 <>
                                   <span className="text-[var(--text-muted)]">{icon}</span>
@@ -551,6 +541,58 @@ export default function AdminPage() {
         </main>
       </div>
     </div>
+
+    {/* Lightbox */}
+    {lightboxUrl && (
+      <div
+        onClick={() => setLightboxUrl(null)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.92)",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "zoom-out",
+        }}
+      >
+        <img
+          src={lightboxUrl}
+          alt="CNIC document"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: "90vw",
+            maxHeight: "90vh",
+            objectFit: "contain",
+            borderRadius: 8,
+            boxShadow: "0 4px 40px rgba(0,0,0,0.6)",
+          }}
+        />
+        <button
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: "absolute",
+            top: 20,
+            right: 20,
+            background: "white",
+            border: "none",
+            borderRadius: "50%",
+            width: 36,
+            height: 36,
+            cursor: "pointer",
+            fontSize: 18,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 700,
+          }}
+        >
+          ✕
+        </button>
+      </div>
+    )}
+    </>
   );
 }
 
