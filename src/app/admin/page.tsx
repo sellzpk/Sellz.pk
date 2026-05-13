@@ -125,18 +125,37 @@ export default function AdminPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const [adsRes, repsRes, countRes, usersRes, cnicsRes, blockedRes] = await Promise.allSettled([
-        fetch("/api/admin/ads-queue").then(r => r.json()),
+
+      // Fetch admin API routes — check status before parsing to catch 401
+      const [adsResp, cnicsResp, blockedResp] = await Promise.all([
+        fetch("/api/admin/ads-queue"),
+        fetch("/api/admin/cnic-queue"),
+        fetch("/api/admin/blocked-users"),
+      ]);
+
+      if ([adsResp, cnicsResp, blockedResp].some(r => r.status === 401)) {
+        sessionStorage.removeItem("sellz_admin_auth");
+        router.replace("/admin/login");
+        return;
+      }
+
+      const [adsData, cnicsData, blockedData] = await Promise.all([
+        adsResp.json(),
+        cnicsResp.json(),
+        blockedResp.json(),
+      ]);
+
+      setPendingAds(Array.isArray(adsData) ? adsData : []);
+      setCnicQueue(Array.isArray(cnicsData) ? cnicsData : []);
+      setBlockedUsers(Array.isArray(blockedData) ? blockedData : []);
+
+      // Supabase client calls (anon key — may have partial data due to RLS)
+      const [repsRes, countRes, usersRes] = await Promise.allSettled([
         supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
         supabase.from("users").select("id", { count: "exact", head: true }),
         supabase.from("users").select("id, full_name, phone, city, created_at, is_admin, cnic_verified, banned").order("created_at", { ascending: false }).limit(50),
-        fetch("/api/admin/cnic-queue").then(r => r.json()),
-        fetch("/api/admin/blocked-users").then(r => r.json()),
       ]);
 
-      if (adsRes.status === "fulfilled") setPendingAds(Array.isArray(adsRes.value) ? adsRes.value : []);
-      if (cnicsRes.status === "fulfilled") setCnicQueue(Array.isArray(cnicsRes.value) ? cnicsRes.value : []);
-      if (blockedRes.status === "fulfilled") setBlockedUsers(Array.isArray(blockedRes.value) ? blockedRes.value : []);
       if (repsRes.status === "fulfilled") setReports((repsRes.value.data as unknown as Report[]) ?? []);
       if (countRes.status === "fulfilled") setTotalUsers(countRes.value.count ?? 0);
       if (usersRes.status === "fulfilled") setAdminUsers((usersRes.value.data as AdminUser[]) ?? []);
