@@ -91,7 +91,13 @@ export default function PostAdPage() {
       return;
     }
 
-    // Upload ownership doc if present
+    if (!form.ownershipDocFile) {
+      setSubmitError("Ownership proof is required.");
+      setSubmitting(false);
+      return;
+    }
+
+    // Upload ownership doc
     let ownershipUrl: string | null = null;
     if (form.ownershipDocFile) {
       const ext = form.ownershipDocFile.name.split(".").pop() ?? "jpg";
@@ -160,14 +166,43 @@ export default function PostAdPage() {
   if (submitted) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center px-6 text-center" style={{ background: "var(--bg)" }}>
-        <div className="w-20 h-20 rounded-full bg-[var(--brand-green-light)] flex items-center justify-center mb-6">
+        <div className="w-20 h-20 rounded-full bg-[var(--brand-green-light)] flex items-center justify-center mb-5">
           <Check size={36} strokeWidth={2.5} className="text-[var(--brand-green)]" />
         </div>
-        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2">Ad Submitted!</h2>
-        <p className="text-sm text-[var(--text-secondary)] mb-8 max-w-xs leading-relaxed">
-          Under review. We&apos;ll approve within <strong>24 hours</strong>.
-        </p>
-        <Link href="/" className="btn-primary">Back to Home</Link>
+        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-1">Ad Submitted for Review</h2>
+        <p className="text-sm text-[var(--text-muted)] mb-5">Our team will review your listing shortly</p>
+
+        <div className="card p-4 w-full max-w-sm text-left mb-6">
+          <p className="text-xs font-semibold text-[var(--text-muted)] mb-3 uppercase tracking-wide">Our team will check:</p>
+          {[
+            "Your photos are clear and real",
+            "Ownership proof is valid",
+            "Price is realistic",
+          ].map(item => (
+            <div key={item} className="flex items-center gap-2.5 mb-2.5">
+              <div className="w-5 h-5 rounded-full bg-[var(--brand-green-light)] flex items-center justify-center flex-shrink-0">
+                <Check size={12} strokeWidth={2.5} className="text-[var(--brand-green)]" />
+              </div>
+              <p className="text-sm text-[var(--text-secondary)]">{item}</p>
+            </div>
+          ))}
+          <p className="text-xs text-[var(--text-muted)] mt-3 pt-3 border-t border-[var(--border)]">
+            You&apos;ll receive an email when your ad goes live — usually within 24 hours.
+          </p>
+        </div>
+
+        <div className="flex gap-3 w-full max-w-sm">
+          <Link href="/" className="flex-1 py-3 rounded-xl border border-[var(--border)] text-sm font-semibold text-[var(--text-primary)] text-center">
+            Back to Home
+          </Link>
+          <button
+            onClick={() => { setSubmitted(false); setStep(0); setForm(EMPTY_FORM); }}
+            className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+            style={{ background: "var(--brand-green)" }}
+          >
+            Post Another Ad
+          </button>
+        </div>
       </div>
     );
   }
@@ -315,7 +350,7 @@ function StepOwnership({ form, setForm, onNext }: { form: FormData; setForm: (f:
   return (
     <div>
       <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Ownership Proof</h2>
-      <p className="text-sm text-[var(--text-muted)] mb-5">Optional — adds a blue Owned badge to your listing</p>
+      <p className="text-sm text-[var(--text-muted)] mb-5">Required — proves you own the item you&apos;re selling</p>
 
       <div className="card p-4 mb-5" style={{ background: "#fffbeb", borderColor: "#fde68a" }}>
         <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">How to take this photo:</p>
@@ -363,8 +398,13 @@ function StepOwnership({ form, setForm, onNext }: { form: FormData; setForm: (f:
         onChange={handleFile}
       />
 
-      <button onClick={onNext} className="btn-primary w-full justify-center py-3" style={{ minHeight: 48 }}>
-        {form.ownershipDocPreview ? "Continue with Ownership Proof" : "Skip — No Ownership Proof"}
+      <button
+        onClick={onNext}
+        disabled={!form.ownershipDocFile}
+        className="btn-primary w-full justify-center py-3 disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ minHeight: 48 }}
+      >
+        Continue with Ownership Proof
         <ChevronRight size={16} strokeWidth={2.5} />
       </button>
     </div>
