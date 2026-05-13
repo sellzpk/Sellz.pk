@@ -40,6 +40,7 @@ export interface Database {
           area: string | null;
           status: "pending" | "active" | "rejected" | "sold" | "expired";
           ownership_proof_url: string | null;
+          details: Record<string, unknown> | null;
           views: number;
           created_at: string;
           expires_at: string;

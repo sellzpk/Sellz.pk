@@ -58,7 +58,7 @@ export function AdCard({ ad }: AdCardProps) {
         {/* Body — flex-1 so all cards stretch equally */}
         <div className="flex flex-col flex-1 p-3">
           <p className="price mb-1">{formatPrice(ad.price)}</p>
-          <p className="text-[13px] text-[var(--text-secondary)] leading-snug line-clamp-2 flex-1 mb-2">
+          <p className="text-sm font-medium leading-snug line-clamp-2 flex-1 mb-2" style={{ color: "var(--text-primary)" }}>
             {ad.title}
           </p>
           {/* Footer row */}

@@ -269,17 +269,6 @@ export function Navbar() {
           </button>
         </div>
 
-        {/* Verification banner */}
-        {user && !cnicVerified && (
-          <div style={{ background: "#FFF8E6", borderTop: "1px solid #FDE68A", padding: "7px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <span className="text-xs" style={{ color: "#92400E" }}>
-              Complete CNIC verification to post ads
-            </span>
-            <Link href="/onboarding" className="text-xs font-semibold flex-shrink-0" style={{ color: "var(--brand-green)" }}>
-              Verify Now →
-            </Link>
-          </div>
-        )}
       </header>
 
       {/* Location modal */}

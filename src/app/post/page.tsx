@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
 import { ArrowLeft, Camera, ChevronRight, Check, X, Upload, AlertCircle, Loader2, FileImage } from "lucide-react";
-import { CATEGORIES, CONDITIONS } from "@/lib/categories";
+import { CATEGORIES, CONDITIONS, getSubcategoryFields } from "@/lib/categories";
 import { getAreas } from "@/lib/locations";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -23,22 +23,7 @@ interface FormData {
   city: string;
   area: string;
   address: string;
-  // category-specific
-  brand: string;
-  model: string;
-  storage: string;
-  ptaApproved: boolean;
-  vehicleMake: string;
-  vehicleModel: string;
-  vehicleYear: string;
-  vehicleMileage: string;
-  fuelType: string;
-  transmission: string;
-  propertyType: string;
-  bedrooms: string;
-  areaSize: string;
-  purpose: string;
-  // photos
+  details: Record<string, string | boolean>;
   photoFiles: File[];
   photoPreviews: string[];
 }
@@ -48,10 +33,7 @@ const EMPTY_FORM: FormData = {
   ownershipDocFile: null, ownershipDocPreview: "",
   title: "", description: "", price: "", condition: "",
   city: "", area: "", address: "",
-  brand: "", model: "", storage: "", ptaApproved: false,
-  vehicleMake: "", vehicleModel: "", vehicleYear: "", vehicleMileage: "",
-  fuelType: "", transmission: "",
-  propertyType: "", bedrooms: "", areaSize: "", purpose: "",
+  details: {},
   photoFiles: [], photoPreviews: [],
 };
 
@@ -125,6 +107,7 @@ export default function PostAdPage() {
         city: form.city || null,
         area: form.area || null,
         ownership_proof_url: ownershipUrl,
+        details: Object.keys(form.details).length > 0 ? form.details : null,
         status: "pending",
       })
       .select("id")
@@ -291,12 +274,12 @@ function StepCategory({ form, setForm, onNext }: { form: FormData; setForm: (f: 
         <div className="space-y-2">
           {selected.subcategories.map(sub => (
             <button
-              key={sub}
-              onClick={() => { setForm({ ...form, category: pickedCat, subcategory: sub }); onNext(); }}
+              key={sub.label}
+              onClick={() => { setForm({ ...form, category: pickedCat, subcategory: sub.label, details: {} }); onNext(); }}
               className="w-full flex items-center justify-between px-4 rounded-xl border text-sm font-medium text-left transition-colors hover:border-[var(--brand-green)] hover:bg-[var(--brand-green-light)]"
               style={{ borderColor: "var(--border)", color: "var(--text-primary)", minHeight: 52 }}
             >
-              {sub}
+              {sub.label}
               <ChevronRight size={15} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
             </button>
           ))}
@@ -413,16 +396,14 @@ function StepOwnership({ form, setForm, onNext }: { form: FormData; setForm: (f:
 
 // ─── Step Details ─────────────────────────────────────────────────────────────
 
-const MOBILE_BRANDS = ["Samsung", "Apple", "Xiaomi", "Oppo", "Vivo", "Realme", "Tecno", "Infinix", "Nokia", "Other"];
-const FUEL_TYPES = ["Petrol", "Diesel", "CNG", "Hybrid", "Electric"];
-const TRANSMISSIONS = ["Manual", "Automatic", "CVT"];
-const PROPERTY_TYPES = ["Apartment", "House", "Plot", "Shop", "Office", "Warehouse", "Other"];
-const ELECTRONICS_BRANDS = ["Samsung", "LG", "Sony", "Haier", "TCL", "Dawlance", "PEL", "Kenwood", "Gree", "Other"];
-
 function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
   const areas = getAreas(form.city);
   const valid = form.title.trim().length >= 5 && form.price.trim().length > 0 && form.condition.length > 0;
-  const cat = form.category;
+  const catFields = getSubcategoryFields(form.category, form.subcategory);
+
+  function setDetail(key: string, val: string | boolean) {
+    setForm({ ...form, details: { ...form.details, [key]: val } });
+  }
 
   return (
     <div>
@@ -430,42 +411,16 @@ function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: F
       <p className="text-sm text-[var(--text-muted)] mb-5">Tell buyers about your item</p>
 
       <div className="space-y-4">
-        {/* Category-specific fields */}
-        {cat === "mobiles" && (
-          <>
-            <SelectField label="Brand" value={form.brand} onChange={v => setForm({ ...form, brand: v })} options={MOBILE_BRANDS} placeholder="Select brand" />
-            <TextField label="Model" value={form.model} onChange={v => setForm({ ...form, model: v })} placeholder="e.g. Galaxy A54" />
-            <SelectField label="Storage" value={form.storage} onChange={v => setForm({ ...form, storage: v })} options={["16GB","32GB","64GB","128GB","256GB","512GB","1TB"]} placeholder="Select storage" />
-            <ToggleField label="PTA Approved" value={form.ptaApproved} onChange={v => setForm({ ...form, ptaApproved: v })} />
-          </>
-        )}
-
-        {cat === "vehicles" && (
-          <>
-            <TextField label="Make" value={form.vehicleMake} onChange={v => setForm({ ...form, vehicleMake: v })} placeholder="e.g. Toyota, Honda, Suzuki" />
-            <TextField label="Model" value={form.vehicleModel} onChange={v => setForm({ ...form, vehicleModel: v })} placeholder="e.g. Corolla, Civic, Alto" />
-            <TextField label="Year" value={form.vehicleYear} onChange={v => setForm({ ...form, vehicleYear: v })} placeholder="e.g. 2022" inputMode="numeric" />
-            <TextField label="Mileage (km)" value={form.vehicleMileage} onChange={v => setForm({ ...form, vehicleMileage: v })} placeholder="e.g. 45000" inputMode="numeric" />
-            <SelectField label="Fuel Type" value={form.fuelType} onChange={v => setForm({ ...form, fuelType: v })} options={FUEL_TYPES} placeholder="Select fuel type" />
-            <SelectField label="Transmission" value={form.transmission} onChange={v => setForm({ ...form, transmission: v })} options={TRANSMISSIONS} placeholder="Select transmission" />
-          </>
-        )}
-
-        {cat === "property" && (
-          <>
-            <SelectField label="Property Type" value={form.propertyType} onChange={v => setForm({ ...form, propertyType: v })} options={PROPERTY_TYPES} placeholder="Select type" />
-            <SelectField label="Bedrooms" value={form.bedrooms} onChange={v => setForm({ ...form, bedrooms: v })} options={["Studio","1","2","3","4","5","6+"]} placeholder="Select bedrooms" />
-            <TextField label="Area Size" value={form.areaSize} onChange={v => setForm({ ...form, areaSize: v })} placeholder="e.g. 240 sq yards, 5 marla" />
-            <SelectField label="Purpose" value={form.purpose} onChange={v => setForm({ ...form, purpose: v })} options={["For Sale","For Rent"]} placeholder="Sale or Rent?" />
-          </>
-        )}
-
-        {(cat === "electronics" || cat === "appliances") && (
-          <>
-            <SelectField label="Brand" value={form.brand} onChange={v => setForm({ ...form, brand: v })} options={ELECTRONICS_BRANDS} placeholder="Select brand" />
-            <TextField label="Model" value={form.model} onChange={v => setForm({ ...form, model: v })} placeholder={'e.g. 55" QLED 4K'} />
-          </>
-        )}
+        {/* Dynamic category-specific fields */}
+        {catFields.map(field => {
+          if (field.type === "boolean") {
+            return <ToggleField key={field.key} label={field.label} value={!!form.details[field.key]} onChange={v => setDetail(field.key, v)} />;
+          }
+          if (field.type === "select") {
+            return <SelectField key={field.key} label={field.label} value={(form.details[field.key] as string) ?? ""} onChange={v => setDetail(field.key, v)} options={field.options!} placeholder={`Select ${field.label.toLowerCase()}`} />;
+          }
+          return <TextField key={field.key} label={field.label} value={(form.details[field.key] as string) ?? ""} onChange={v => setDetail(field.key, v)} placeholder={field.placeholder} inputMode={field.type === "number" ? "numeric" : undefined} />;
+        })}
 
         {/* Common fields */}
         <div>

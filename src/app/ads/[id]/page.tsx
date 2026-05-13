@@ -11,6 +11,7 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { Footer, FooterMobile } from "@/components/Footer";
 import { createClient } from "@/lib/supabase/client";
 import type { AdWithPhotos } from "@/lib/types";
+import { getSubcategoryFields } from "@/lib/categories";
 import {
   ChevronLeft, ChevronRight, MapPin, Clock,
   Share2, Flag, ArrowLeft, MessageCircle, ImageOff,
@@ -296,6 +297,31 @@ export default function AdDetailPage() {
                   </div>
                 )}
 
+                {/* Details table */}
+                {(() => {
+                  if (!ad.details) return null;
+                  const fields = getSubcategoryFields(ad.category, ad.subcategory ?? "");
+                  const entries = fields
+                    .map(f => ({ label: f.label, value: (ad.details as Record<string, unknown>)[f.key], unit: f.unit }))
+                    .filter(e => e.value !== undefined && e.value !== null && e.value !== "");
+                  if (entries.length === 0) return null;
+                  return (
+                    <div style={{ marginBottom: 20 }}>
+                      <p className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Details</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: "var(--border)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+                        {entries.map(({ label, value, unit }) => (
+                          <div key={label} style={{ background: "var(--surface)", padding: "10px 12px" }}>
+                            <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>{label}</p>
+                            <p style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>
+                              {typeof value === "boolean" ? (value ? "Yes" : "No") : `${value}${unit ? " " + unit : ""}`}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div style={{ borderTop: "1px solid var(--border)", marginBottom: 16 }} />
 
                 {/* Report */}
@@ -393,6 +419,8 @@ export default function AdDetailPage() {
                     </div>
                   ))}
                 </div>
+
+                <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>Ad ID: {ad.id}</p>
               </div>
             </div>
           </div>
