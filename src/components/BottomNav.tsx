@@ -43,7 +43,7 @@ export function BottomNav() {
     { href: "/", icon: Home, label: "Home" },
     { href: "/search", icon: Search, label: "Search" },
     { href: "/chats", icon: MessageCircle, label: "Chats" },
-    { href: user ? `/profile/${user.id}` : "/auth", icon: User, label: "Profile" },
+    { href: user ? "/profile/me" : "/auth/login", icon: User, label: "Profile" },
   ];
 
   return (

@@ -7,10 +7,10 @@ import { SearchBar } from "./SearchBar";
 import { AuthModal } from "./AuthModal";
 import {
   Bell, Plus, User, LogOut, FileText, ChevronDown,
-  Search, MapPin, X, Check,
+  Search, MapPin, X, Check, Shield,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { CITY_DATA, CITIES, getAreas } from "@/lib/locations";
+import { CITIES, getAreas } from "@/lib/locations";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 type SavedLocation = { city: string; area: string; display: string };
@@ -38,6 +38,8 @@ export function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [userCitySet, setUserCitySet] = useState(false);
   const [displayName, setDisplayName] = useState("User");
+  const [userEmail, setUserEmail] = useState("");
+  const [cnicVerified, setCnicVerified] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Location selector
@@ -56,7 +58,8 @@ export function Navbar() {
       if (user) {
         const name = user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? "User";
         setDisplayName(name);
-        supabase.from("users").select("city").eq("id", user.id).single().then(({ data }) => {
+        setUserEmail(user.email ?? "");
+        supabase.from("users").select("city, cnic_verified").eq("id", user.id).single().then(({ data }) => {
           if (data?.city) {
             setUserCitySet(true);
             if (!readSavedLocation()) {
@@ -65,11 +68,13 @@ export function Navbar() {
               saveLocation(loc);
             }
           }
+          setCnicVerified(data?.cnic_verified ?? false);
         });
       }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (!session?.user) { setCnicVerified(false); setUserEmail(""); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -88,6 +93,7 @@ export function Navbar() {
     const supabase = createClient();
     await supabase.auth.signOut();
     setUser(null);
+    setCnicVerified(false);
     setDropdownOpen(false);
     router.push("/");
     router.refresh();
@@ -123,7 +129,6 @@ export function Navbar() {
     setLocModal(false);
   }
 
-  const locLabel = savedLoc?.display ?? "Select City";
   const initial = displayName[0]?.toUpperCase() ?? "U";
   const areas = locCity ? getAreas(locCity) : [];
 
@@ -146,17 +151,11 @@ export function Navbar() {
             <SearchBar city={savedLoc?.city ?? ""} />
           </div>
 
-          {/* Location button — both mobile and desktop */}
+          {/* Location button */}
           <button
             onClick={openLocModal}
             className="flex items-center gap-1 rounded-lg border px-2 py-1.5 transition-colors hover:border-[var(--brand-green)] flex-shrink-0"
-            style={{
-              borderColor: "var(--border)",
-              background: "var(--bg)",
-              color: "var(--text-secondary)",
-              fontSize: 12,
-              maxWidth: 100,
-            }}
+            style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-secondary)", fontSize: 12, maxWidth: 100 }}
           >
             <MapPin size={13} strokeWidth={2} style={{ color: "var(--brand-green)", flexShrink: 0 }} />
             <span className="truncate" style={{ maxWidth: 72 }}>{savedLoc?.city ?? "City"}</span>
@@ -194,13 +193,16 @@ export function Navbar() {
                   </button>
 
                   {dropdownOpen && (
-                    <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-[var(--border)] rounded-xl shadow-lg py-1 z-50">
-                      <div className="px-3 py-2 border-b border-[var(--border)]">
+                    <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-[var(--border)] rounded-xl shadow-lg py-1 z-50">
+                      <div className="px-3 py-2.5 border-b border-[var(--border)]">
                         <p className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>{displayName}</p>
-                        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{savedLoc?.city ?? "—"}</p>
+                        {userEmail && <p className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>{userEmail}</p>}
+                        <p className="text-[11px] font-medium mt-0.5" style={{ color: cnicVerified ? "var(--brand-green)" : "#F59E0B" }}>
+                          {cnicVerified ? "✓ Verified" : "⏳ Unverified"}
+                        </p>
                       </div>
                       <Link
-                        href={`/profile/${user.id}`}
+                        href="/profile/me"
                         onClick={() => setDropdownOpen(false)}
                         className="flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-[var(--bg)] transition-colors"
                         style={{ color: "var(--text-secondary)" }}
@@ -215,6 +217,17 @@ export function Navbar() {
                       >
                         <FileText size={15} strokeWidth={2} /> My Ads
                       </Link>
+                      {!cnicVerified && (
+                        <Link
+                          href="/onboarding"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-amber-50 transition-colors"
+                          style={{ color: "#D97706" }}
+                        >
+                          <Shield size={15} strokeWidth={2} /> Complete Verification
+                        </Link>
+                      )}
+                      <div className="border-t border-[var(--border)] mt-1" />
                       <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-red-50 transition-colors text-red-600"
@@ -226,14 +239,22 @@ export function Navbar() {
                 </div>
               </>
             ) : (
-              <button
-                onClick={() => { setAuthTitle(undefined); setAuthSubtitle(undefined); setAuthOpen(true); }}
-                className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 transition-colors hover:text-[var(--brand-green)]"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                <User size={18} strokeWidth={2} />
-                Login
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/auth/login"
+                  className="text-sm font-medium px-3 py-2 hover:text-[var(--brand-green)] transition-colors"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/auth/signup"
+                  className="text-sm font-semibold px-3 py-2 rounded-lg border transition-colors hover:bg-[var(--brand-green-light)]"
+                  style={{ borderColor: "var(--brand-green)", color: "var(--brand-green)" }}
+                >
+                  Sign Up
+                </Link>
+              </div>
             )}
           </div>
 
@@ -247,6 +268,18 @@ export function Navbar() {
             <span className="hidden sm:inline">Post Ad</span>
           </button>
         </div>
+
+        {/* Verification banner */}
+        {user && !cnicVerified && (
+          <div style={{ background: "#FFF8E6", borderTop: "1px solid #FDE68A", padding: "7px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span className="text-xs" style={{ color: "#92400E" }}>
+              Complete CNIC verification to post ads
+            </span>
+            <Link href="/onboarding" className="text-xs font-semibold flex-shrink-0" style={{ color: "var(--brand-green)" }}>
+              Verify Now →
+            </Link>
+          </div>
+        )}
       </header>
 
       {/* Location modal */}
@@ -262,7 +295,6 @@ export function Navbar() {
             </div>
 
             <div className="overflow-y-auto" style={{ maxHeight: "calc(80dvh - 120px)" }}>
-              {/* City list */}
               <div className="px-4 pb-2">
                 <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>City</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -285,7 +317,6 @@ export function Navbar() {
                 </div>
               </div>
 
-              {/* Area list */}
               {locCity && areas.length > 1 && (
                 <div className="px-4 pb-4 mt-3">
                   <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Area (optional)</p>

@@ -362,20 +362,37 @@ export default function OnboardingPage() {
           {/* DONE */}
           {step === "done" && (
             <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-[var(--brand-green-light)] flex items-center justify-center mx-auto mb-6">
-                <Check size={36} strokeWidth={2.5} style={{ color: "var(--brand-green)" }} />
+              <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6" style={{ background: cnicFront ? "var(--brand-green-light)" : "#FFF8E6" }}>
+                <Check size={36} strokeWidth={2.5} style={{ color: cnicFront ? "var(--brand-green)" : "#F59E0B" }} />
               </div>
-              <h2 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>You&apos;re all set!</h2>
-              <p className="text-sm mb-2 max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
-                {cnicFront
-                  ? "Your CNIC is under review. You can post ads once verified (usually within 24 hours)."
-                  : `You can browse listings in ${city}. Complete CNIC verification to post ads.`}
-              </p>
+              <h2 className="text-xl font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+                {cnicFront ? "Documents submitted!" : "You're all set!"}
+              </h2>
+              {cnicFront ? (
+                <>
+                  <p className="text-sm mb-4 max-w-xs mx-auto leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                    Your CNIC is under review — usually within <strong>24 hours</strong>.
+                    Meanwhile you can browse ads freely.
+                  </p>
+                  <div className="card p-4 mb-6 text-left max-w-xs mx-auto">
+                    <p className="text-xs font-semibold mb-1" style={{ color: "var(--text-primary)" }}>What happens next?</p>
+                    <div className="space-y-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                      <p>✓ Admin reviews your CNIC photos</p>
+                      <p>✓ Once approved, you can post ads</p>
+                      <p>✓ You&apos;ll see a Verified badge on your profile</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm mb-6 max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
+                  Browse listings in {city}. Complete CNIC verification anytime to unlock posting.
+                </p>
+              )}
               <button
                 onClick={() => router.push("/")}
-                className="btn-primary justify-center py-3 px-8 mt-6"
+                className="btn-primary justify-center py-3 px-8"
               >
-                Start Browsing
+                Browse Ads
               </button>
             </div>
           )}
