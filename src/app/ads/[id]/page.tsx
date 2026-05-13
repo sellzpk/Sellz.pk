@@ -14,7 +14,7 @@ import type { AdWithPhotos } from "@/lib/types";
 import {
   ChevronLeft, ChevronRight, MapPin, Clock,
   Share2, Flag, ArrowLeft, MessageCircle, ImageOff,
-  Lock, Phone, Loader2,
+  Lock, Phone, Loader2, ShieldCheck, Star, X,
 } from "lucide-react";
 import type { Ad } from "@/components/AdCard";
 
@@ -45,44 +45,18 @@ function relativeTime(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function SkeletonDetail() {
-  return (
-    <div className="max-w-4xl mx-auto animate-pulse">
-      <div className="px-4 py-3">
-        <div className="h-4 w-20 bg-gray-200 rounded" />
-      </div>
-      <div className="md:grid md:grid-cols-5 md:gap-6 md:px-4">
-        <div className="md:col-span-3">
-          <div className="bg-gray-200 md:rounded-xl" style={{ aspectRatio: "4/3" }} />
-          <div className="px-4 md:px-0 mt-4">
-            <div className="card p-4 space-y-3">
-              <div className="h-6 w-3/4 bg-gray-200 rounded" />
-              <div className="h-8 w-1/3 bg-gray-200 rounded" />
-              <div className="h-4 w-1/2 bg-gray-200 rounded" />
-            </div>
-          </div>
-        </div>
-        <div className="md:col-span-2 px-4 md:px-0 mt-4 md:mt-0">
-          <div className="card p-4 space-y-3">
-            <div className="h-11 w-full bg-gray-200 rounded-xl" />
-            <div className="h-11 w-full bg-gray-200 rounded-xl" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AdDetailPage() {
   const { id } = useParams();
   const [ad, setAd] = useState<AdWithPhotos | null>(null);
   const [similar, setSimilar] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentImg, setCurrentImg] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
   const [reported, setReported] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
   const [numberRevealed, setNumberRevealed] = useState(false);
+  const [touchStart, setTouchStart] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -92,7 +66,6 @@ export default function AdDetailPage() {
   async function loadAd(adId: number) {
     setLoading(true);
     const supabase = createClient();
-
     const { data } = await supabase
       .from("ads")
       .select("*, ad_photos(*), users(id, full_name, city, cnic_verified, whatsapp_number)")
@@ -101,7 +74,6 @@ export default function AdDetailPage() {
 
     if (data) {
       setAd(data as AdWithPhotos);
-
       const { data: simData } = await supabase
         .from("ads")
         .select("id, title, price, city, area, category, created_at, ad_photos(url)")
@@ -132,8 +104,8 @@ export default function AdDetailPage() {
     return (
       <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
         <Navbar />
-        <main className="flex-1 pb-32 md:pb-8">
-          <SkeletonDetail />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 size={28} className="animate-spin" style={{ color: "var(--brand-green)" }} />
         </main>
         <BottomNav />
       </div>
@@ -155,7 +127,16 @@ export default function AdDetailPage() {
   const sellerVerified = seller?.cnic_verified ?? false;
   const waNumber = seller?.whatsapp_number ?? undefined;
   const hasWhatsapp = Boolean(waNumber);
-  const images = ad.ad_photos.map(p => p.url);
+  const images = [...ad.ad_photos].sort((a, b) => a.order_index - b.order_index).map(p => p.url);
+
+  function prev() { setCurrentImg(i => Math.max(0, i - 1)); }
+  function next() { setCurrentImg(i => Math.min(images.length - 1, i + 1)); }
+
+  function handleTouchStart(e: React.TouchEvent) { setTouchStart(e.targetTouches[0].clientX); }
+  function handleTouchEnd(e: React.TouchEvent) {
+    const diff = touchStart - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) { if (diff > 0) next(); else prev(); }
+  }
 
   function handleViewNumber() {
     if (!chatStarted) { setChatOpen(true); return; }
@@ -166,207 +147,259 @@ export default function AdDetailPage() {
     <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
       <Navbar />
 
-      <main className="flex-1 pb-32 md:pb-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="px-4 py-3 flex items-center gap-2">
-            <Link href="/" className="flex items-center gap-1.5 text-sm transition-colors hover:text-[var(--brand-green)]" style={{ color: "var(--text-secondary)" }}>
-              <ArrowLeft size={16} strokeWidth={2} />
-              Back
-            </Link>
-            <span style={{ color: "var(--text-muted)" }}>/</span>
-            <span className="text-sm capitalize" style={{ color: "var(--text-muted)" }}>{ad.category}</span>
-          </div>
+      <main className="flex-1 pb-28 md:pb-12">
+        {/* Breadcrumb */}
+        <div className="max-w-6xl mx-auto px-4 md:px-8 py-3 flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
+          <Link href="/" className="hover:text-[var(--brand-green)] transition-colors flex items-center gap-1">
+            <ArrowLeft size={14} strokeWidth={2} /> Home
+          </Link>
+          <ChevronRight size={13} strokeWidth={2} />
+          <Link href={`/search?category=${ad.category}`} className="capitalize hover:text-[var(--brand-green)] transition-colors">
+            {ad.category}
+          </Link>
+          <ChevronRight size={13} strokeWidth={2} />
+          <span className="truncate max-w-xs" style={{ color: "var(--text-primary)", fontWeight: 500 }}>{ad.title}</span>
+        </div>
 
-          <div className="md:grid md:grid-cols-5 md:gap-6 md:px-4">
-            {/* Left: photos + details */}
-            <div className="md:col-span-3">
+        {/* Main grid */}
+        <div className="max-w-6xl mx-auto px-0 md:px-8" style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}>
+          <div className="md:grid" style={{ gridTemplateColumns: "1fr 360px", gap: 24, display: "inherit" }}>
+
+            {/* LEFT: photos + info */}
+            <div>
               {/* Gallery */}
-              <div className="relative bg-[#f0f0ed] md:rounded-xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
-                {images[0] ? (
-                  <img src={images[currentImg] || images[0]} alt={ad.title} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ background: "#F5F5F3" }}>
-                    <ImageOff size={40} strokeWidth={1.5} style={{ color: "#BABAB5" }} />
-                  </div>
-                )}
-                {images.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => setCurrentImg(i => Math.max(0, i - 1))}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center shadow"
-                    >
-                      <ChevronLeft size={18} strokeWidth={2} />
-                    </button>
-                    <button
-                      onClick={() => setCurrentImg(i => Math.min(images.length - 1, i + 1))}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center shadow"
-                    >
-                      <ChevronRight size={18} strokeWidth={2} />
-                    </button>
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                      {images.map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => setCurrentImg(i)}
-                          className="rounded-full transition-all"
-                          style={{ width: i === currentImg ? 20 : 6, height: 6, background: i === currentImg ? "var(--brand-green)" : "rgba(255,255,255,0.7)" }}
-                        />
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="absolute top-3 right-3 flex gap-2">
-                  <button className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow">
-                    <Share2 size={15} strokeWidth={2} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Details card */}
-              <div className="px-4 md:px-0 mt-4">
-                <div className="card p-4">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        {sellerVerified && <BadgeVerified type="verified" />}
-                      </div>
-                      <h1 className="text-xl font-bold leading-tight" style={{ color: "var(--text-primary)" }}>{ad.title}</h1>
-                    </div>
-                    <p className="text-2xl font-black whitespace-nowrap" style={{ color: "var(--text-primary)", letterSpacing: "-0.5px" }}>
-                      {formatPrice(ad.price)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-                    <span className="flex items-center gap-1">
-                      <MapPin size={12} strokeWidth={2} />
-                      {ad.area ? `${ad.area}, ` : ""}{ad.city}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock size={12} strokeWidth={2} />
-                      {relativeTime(ad.created_at)}
-                    </span>
-                  </div>
-
-                  {ad.description && (
-                    <div className="border-t pt-4" style={{ borderColor: "var(--border)" }}>
-                      <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Description</p>
-                      <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{ad.description}</p>
+              <div>
+                {/* Main photo */}
+                <div
+                  className="relative overflow-hidden md:rounded-xl"
+                  style={{ background: "#111", cursor: images.length ? "zoom-in" : "default" }}
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  onClick={() => images.length && setLightbox(true)}
+                >
+                  {images[0] ? (
+                    <img
+                      src={images[currentImg]}
+                      alt={ad.title}
+                      style={{ width: "100%", height: "clamp(240px, 45vw, 500px)", objectFit: "contain", display: "block" }}
+                    />
+                  ) : (
+                    <div style={{ width: "100%", height: 300, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <ImageOff size={40} strokeWidth={1.5} style={{ color: "#555" }} />
                     </div>
                   )}
 
-                  <button
-                    onClick={() => setReported(!reported)}
-                    className="mt-4 flex items-center gap-1.5 text-xs transition-colors"
-                    style={{ color: reported ? "var(--danger)" : "var(--text-muted)" }}
-                  >
-                    <Flag size={12} strokeWidth={2} />
-                    {reported ? "Reported" : "Report this ad"}
-                  </button>
+                  {/* Arrows */}
+                  {images.length > 1 && (
+                    <>
+                      <button
+                        onClick={e => { e.stopPropagation(); prev(); }}
+                        disabled={currentImg === 0}
+                        style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 44, height: 44, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: currentImg === 0 ? 0.3 : 1, transition: "opacity 0.15s" }}
+                      >
+                        <ChevronLeft size={22} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); next(); }}
+                        disabled={currentImg === images.length - 1}
+                        style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 44, height: 44, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: currentImg === images.length - 1 ? 0.3 : 1, transition: "opacity 0.15s" }}
+                      >
+                        <ChevronRight size={22} strokeWidth={2.5} />
+                      </button>
+                    </>
+                  )}
+
+                  {/* Counter + share */}
+                  <div style={{ position: "absolute", bottom: 12, right: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                    {images.length > 1 && (
+                      <span style={{ background: "rgba(0,0,0,0.6)", color: "white", fontSize: 12, padding: "4px 10px", borderRadius: 20 }}>
+                        {currentImg + 1} / {images.length}
+                      </span>
+                    )}
+                    <button
+                      onClick={e => { e.stopPropagation(); }}
+                      style={{ background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", width: 36, height: 36, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Share2 size={15} strokeWidth={2} />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Thumbnail strip */}
+                {images.length > 1 && (
+                  <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "10px 16px 4px", scrollbarWidth: "none" }}>
+                    {images.map((url, i) => (
+                      <img
+                        key={i}
+                        src={url}
+                        onClick={() => setCurrentImg(i)}
+                        style={{ width: 72, height: 54, objectFit: "cover", borderRadius: 7, cursor: "pointer", flexShrink: 0, border: `2px solid ${i === currentImg ? "var(--brand-green)" : "transparent"}`, opacity: i === currentImg ? 1 : 0.65, transition: "all 0.15s" }}
+                        alt=""
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Ad info */}
+              <div className="px-4 md:px-0 mt-5">
+                {/* Badges */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                  {sellerVerified && (
+                    <span style={{ background: "var(--brand-green-light)", color: "var(--brand-green)", fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 4 }}>
+                      <ShieldCheck size={13} strokeWidth={2} /> Verified Seller
+                    </span>
+                  )}
+                  {ad.ownership_proof_url && (
+                    <span style={{ background: "#EFF6FF", color: "#185FA5", fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, display: "flex", alignItems: "center", gap: 4 }}>
+                      <Star size={13} strokeWidth={2} /> Ownership Proof
+                    </span>
+                  )}
+                  {ad.condition && (
+                    <span style={{ background: "var(--bg)", color: "var(--text-secondary)", fontSize: 12, fontWeight: 500, padding: "4px 10px", borderRadius: 20, border: "1px solid var(--border)" }}>
+                      {ad.condition}
+                    </span>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-1px", marginBottom: 6 }}>
+                  {formatPrice(ad.price)}
+                </div>
+
+                {/* Title */}
+                <h1 style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 12px", lineHeight: 1.35 }}>
+                  {ad.title}
+                </h1>
+
+                {/* Meta */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, color: "var(--text-muted)", fontSize: 13, marginBottom: 20 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <MapPin size={13} strokeWidth={2} style={{ color: "var(--brand-green)" }} />
+                    {ad.area ? `${ad.area}, ` : ""}{ad.city}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <Clock size={13} strokeWidth={2} />
+                    {relativeTime(ad.created_at)}
+                  </span>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--border)", marginBottom: 20 }} />
+
+                {/* Description */}
+                {ad.description && (
+                  <div style={{ marginBottom: 20 }}>
+                    <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Description</p>
+                    <p style={{ fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.8, whiteSpace: "pre-wrap", margin: 0 }}>
+                      {ad.description}
+                    </p>
+                  </div>
+                )}
+
+                <div style={{ borderTop: "1px solid var(--border)", marginBottom: 16 }} />
+
+                {/* Report */}
+                <button
+                  onClick={() => setReported(!reported)}
+                  style={{ background: "none", border: "none", color: reported ? "var(--danger)" : "var(--text-muted)", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <Flag size={13} strokeWidth={2} />
+                  {reported ? "Reported" : "Report this ad"}
+                </button>
               </div>
             </div>
 
-            {/* Right: seller + CTA */}
-            <div className="md:col-span-2 px-4 md:px-0 mt-4 md:mt-0">
-              {/* CTA buttons — desktop */}
-              <div className="hidden md:flex flex-col gap-2 mb-4">
+            {/* RIGHT: sticky sidebar */}
+            <div className="hidden md:block px-0">
+              <div style={{ position: "sticky", top: 80 }}>
+                {/* Send Message */}
                 <button
                   onClick={() => setChatOpen(true)}
-                  className="btn-primary w-full justify-center py-3"
+                  className="btn-primary w-full justify-center"
+                  style={{ padding: "14px 16px", borderRadius: 10, fontSize: 15, marginBottom: 10 }}
                 >
                   <MessageCircle size={18} strokeWidth={2} />
                   Send Message
                 </button>
 
-                {hasWhatsapp && waNumber && (
+                {/* WhatsApp / View Number */}
+                {hasWhatsapp && waNumber ? (
                   numberRevealed ? (
                     <a
                       href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border font-medium text-sm transition-colors"
-                      style={{ borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)" }}
+                      className="flex items-center justify-center gap-2 w-full rounded-xl border font-medium text-sm transition-colors"
+                      style={{ padding: "13px 16px", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", marginBottom: 20, textDecoration: "none" }}
                     >
                       <WaIcon size={16} color="var(--brand-green)" />
-                      {formatWaDisplay(waNumber)}
-                      <span className="text-xs opacity-70">· Open in WhatsApp →</span>
+                      {formatWaDisplay(waNumber)} · Open WhatsApp →
                     </a>
                   ) : (
                     <button
                       onClick={handleViewNumber}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border font-medium text-sm transition-colors"
-                      style={
-                        chatStarted
-                          ? { borderColor: "var(--brand-green)", color: "var(--brand-green)" }
-                          : { borderColor: "var(--border)", color: "var(--text-muted)", cursor: "not-allowed" }
-                      }
-                      title={chatStarted ? undefined : "Start a chat first"}
+                      className="flex items-center justify-center gap-2 w-full rounded-xl border font-medium text-sm"
+                      style={{
+                        padding: "13px 16px", marginBottom: 20,
+                        ...(chatStarted
+                          ? { borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }
+                          : { borderColor: "var(--border)", color: "var(--text-muted)", cursor: "not-allowed" }),
+                      }}
                     >
                       {chatStarted ? <Phone size={16} strokeWidth={2} /> : <Lock size={16} strokeWidth={2} />}
-                      View Number
-                      {!chatStarted && (
-                        <span className="text-[10px] opacity-60 ml-1">— chat first</span>
-                      )}
+                      View Number{!chatStarted && <span style={{ fontSize: 11, opacity: 0.6 }}>— chat first</span>}
                     </button>
                   )
+                ) : (
+                  <div style={{ marginBottom: 20 }} />
                 )}
-              </div>
 
-              {/* Seller card */}
-              <div className="card p-4 mb-4">
-                <p className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Seller</p>
-                <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className="w-11 h-11 rounded-full flex items-center justify-center text-base font-black text-white"
-                    style={{ background: "var(--brand-green)" }}
-                  >
-                    {sellerName[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{sellerName}</p>
-                      {sellerVerified && <BadgeVerified type="verified" />}
-                      {hasWhatsapp && (
-                        <span
-                          className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                          style={{ background: "rgba(37,211,102,0.12)" }}
-                          title="Has WhatsApp"
-                        >
-                          <WaIcon size={12} color="#25D366" />
-                        </span>
-                      )}
+                {/* Seller card */}
+                <div className="card p-4 mb-4">
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 12 }}>SELLER</p>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--brand-green)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+                      {sellerName[0].toUpperCase()}
                     </div>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>{sellerCity}</p>
+                    <div className="flex-1 min-w-0">
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                        <span className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{sellerName}</span>
+                        {sellerVerified && <BadgeVerified type="verified" />}
+                        {hasWhatsapp && (
+                          <span style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(37,211,102,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <WaIcon size={11} color="#25D366" />
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{sellerCity}</p>
+                    </div>
                   </div>
+                  <Link
+                    href={`/profile/${seller?.id ?? ""}`}
+                    className="block text-center text-xs font-medium py-2 rounded-lg border hover:bg-[var(--bg)] transition-colors"
+                    style={{ color: "var(--brand-green)", borderColor: "var(--border)" }}
+                  >
+                    View all listings →
+                  </Link>
                 </div>
-                <Link
-                  href={`/profile/${seller?.id ?? ""}`}
-                  className="block text-center text-sm font-medium hover:underline"
-                  style={{ color: "var(--brand-green)" }}
-                >
-                  View all listings →
-                </Link>
-              </div>
 
-              {/* Safety tips */}
-              <div className="card p-4">
-                <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Safety Tips</p>
-                <ul className="space-y-1.5">
-                  {["Meet in a public place", "Never send money in advance", "Inspect the item before paying", "Only deal with Verified sellers", "Report suspicious listings"].map(tip => (
-                    <li key={tip} className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--brand-green)" }} />
+                {/* Safety tips */}
+                <div className="card p-4">
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 10 }}>Safety Tips</p>
+                  {["Meet in a public place", "Never send money in advance", "Inspect item before paying", "Only deal with Verified sellers", "Report suspicious listings"].map(tip => (
+                    <div key={tip} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, fontSize: 12, color: "var(--text-secondary)" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-green)", flexShrink: 0, marginTop: 5 }} />
                       {tip}
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Similar ads */}
           {similar.length > 0 && (
-            <div className="px-4 mt-8">
+            <div className="px-4 md:px-0 mt-4">
               <h2 className="text-base font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Similar Listings</h2>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {similar.map(a => <AdCard key={a.id} ad={a} />)}
@@ -377,14 +410,13 @@ export default function AdDetailPage() {
       </main>
 
       {/* Mobile sticky bottom bar */}
-      <div className="fixed bottom-16 left-0 right-0 px-4 pb-2 md:hidden z-20 flex gap-2">
+      <div className="md:hidden fixed left-0 right-0 bg-white border-t border-[var(--border)] px-4 py-3 z-20 flex gap-2" style={{ bottom: 56, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
         <button
           onClick={() => setChatOpen(true)}
-          className="btn-primary justify-center py-3"
-          style={{ flex: "0 0 60%" }}
+          className="btn-primary justify-center flex-1"
+          style={{ padding: "13px 16px", borderRadius: 10, fontSize: 15 }}
         >
-          <MessageCircle size={18} strokeWidth={2} />
-          Send Message
+          <MessageCircle size={18} strokeWidth={2} /> Send Message
         </button>
 
         {hasWhatsapp && waNumber ? (
@@ -393,22 +425,19 @@ export default function AdDetailPage() {
               href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm transition-colors"
-              style={{ flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)" }}
+              className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
+              style={{ flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", textDecoration: "none" }}
             >
-              <WaIcon size={16} color="var(--brand-green)" />
-              WhatsApp
+              <WaIcon size={16} color="var(--brand-green)" /> WhatsApp
             </a>
           ) : (
             <button
               onClick={handleViewNumber}
-              className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm transition-colors"
-              style={
-                chatStarted
-                  ? { flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)" }
-                  : { flex: "0 0 38%", borderColor: "var(--border)", color: "var(--text-muted)" }
+              className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
+              style={chatStarted
+                ? { flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }
+                : { flex: "0 0 38%", borderColor: "var(--border)", color: "var(--text-muted)", cursor: "default" }
               }
-              title={chatStarted ? undefined : "Start a chat first"}
             >
               {chatStarted ? <Phone size={15} strokeWidth={2} /> : <Lock size={15} strokeWidth={2} />}
               View No.
@@ -418,6 +447,62 @@ export default function AdDetailPage() {
           <div style={{ flex: "0 0 38%" }} />
         )}
       </div>
+
+      {/* Mobile seller info (below photo on mobile) */}
+      <div className="md:hidden px-4 mt-4" style={{ paddingBottom: 8 }}>
+        <div className="card p-4">
+          <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", marginBottom: 10 }}>SELLER</p>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--brand-green)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
+              {sellerName[0].toUpperCase()}
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{sellerName}</span>
+                {sellerVerified && <BadgeVerified type="verified" />}
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{sellerCity}</p>
+            </div>
+          </div>
+          <Link href={`/profile/${seller?.id ?? ""}`} className="text-xs font-medium" style={{ color: "var(--brand-green)" }}>
+            View all listings →
+          </Link>
+        </div>
+      </div>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          onClick={() => setLightbox(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <img
+            src={images[currentImg]}
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: "95vw", maxHeight: "95vh", objectFit: "contain", borderRadius: 8 }}
+            alt={ad.title}
+          />
+          <button
+            onClick={() => setLightbox(false)}
+            style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 40, height: 40, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          {images.length > 1 && (
+            <>
+              <button onClick={e => { e.stopPropagation(); prev(); }} style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 44, height: 44, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ChevronLeft size={22} strokeWidth={2.5} />
+              </button>
+              <button onClick={e => { e.stopPropagation(); next(); }} style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: 44, height: 44, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ChevronRight size={22} strokeWidth={2.5} />
+              </button>
+              <span style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.5)", color: "white", fontSize: 13, padding: "5px 14px", borderRadius: 20 }}>
+                {currentImg + 1} / {images.length}
+              </span>
+            </>
+          )}
+        </div>
+      )}
 
       <ChatPanel
         isOpen={chatOpen}
