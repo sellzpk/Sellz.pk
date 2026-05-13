@@ -337,6 +337,10 @@ export default function AdminPage() {
                 <StatCard icon={<Users size={20} strokeWidth={2} />} value={totalUsers} label="Total Users" color="gray" />
               </div>
 
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <CompressPhotosCard />
+              </div>
+
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="card p-4">
                   <div className="flex items-center justify-between mb-4">
@@ -883,6 +887,46 @@ export default function AdminPage() {
       </div>
     )}
     </>
+  );
+}
+
+function CompressPhotosCard() {
+  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [result, setResult] = useState<{ processed: number; skipped: number; failed: number; total: number } | null>(null);
+
+  async function run() {
+    setStatus("running");
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/compress-photos", { method: "POST" });
+      if (!res.ok) { setStatus("error"); return; }
+      const data = await res.json();
+      setResult(data);
+      setStatus("done");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="card p-4">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">Image Optimisation</h3>
+      <p className="text-xs text-[var(--text-muted)] mb-4">Compress & resize all existing ad photos to JPEG 1400px max, quality 82.</p>
+      {result && status === "done" && (
+        <div className="text-xs mb-3 p-2 rounded-lg bg-[var(--brand-green-light)]" style={{ color: "var(--brand-green)" }}>
+          ✓ {result.processed} compressed · {result.skipped} already optimised · {result.failed} failed · {result.total} total
+        </div>
+      )}
+      {status === "error" && <p className="text-xs mb-3 text-red-500">Failed — check logs.</p>}
+      <button
+        onClick={run}
+        disabled={status === "running"}
+        className="btn-primary text-sm disabled:opacity-50"
+        style={{ padding: "8px 16px" }}
+      >
+        {status === "running" ? "Processing…" : status === "done" ? "Run Again" : "Compress All Photos"}
+      </button>
+    </div>
   );
 }
 

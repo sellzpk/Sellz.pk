@@ -11,6 +11,33 @@ import { createClient } from "@/lib/supabase/client";
 
 const STEPS = ["Category", "Ownership", "Details", "Photos", "Review"];
 
+async function compressImage(file: File, maxPx = 1400, quality = 0.82): Promise<File> {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxPx || height > maxPx) {
+        if (width >= height) { height = Math.round((height * maxPx) / width); width = maxPx; }
+        else { width = Math.round((width * maxPx) / height); height = maxPx; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(
+        blob => {
+          if (!blob) { resolve(file); return; }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+        },
+        "image/jpeg", quality
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 interface FormData {
   category: string;
   subcategory: string;
@@ -323,11 +350,12 @@ function StepCategory({ form, setForm, onNext }: { form: FormData; setForm: (f: 
 function StepOwnership({ form, setForm, onNext }: { form: FormData; setForm: (f: FormData) => void; onNext: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const preview = URL.createObjectURL(file);
-    setForm({ ...form, ownershipDocFile: file, ownershipDocPreview: preview });
+    const compressed = await compressImage(file, 1400, 0.80);
+    const preview = URL.createObjectURL(compressed);
+    setForm({ ...form, ownershipDocFile: compressed, ownershipDocPreview: preview });
   }
 
   return (
@@ -614,12 +642,13 @@ function StepPhotos({ form, setForm, onNext }: { form: FormData; setForm: (f: Fo
   const inputRef = useRef<HTMLInputElement>(null);
   const isMobile = typeof navigator !== "undefined" && /Mobi|Android/i.test(navigator.userAgent);
 
-  function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     const remaining = 10 - form.photoFiles.length;
     const toAdd = files.slice(0, remaining);
-    const newFiles = [...form.photoFiles, ...toAdd];
-    const newPreviews = [...form.photoPreviews, ...toAdd.map(f => URL.createObjectURL(f))];
+    const compressed = await Promise.all(toAdd.map(f => compressImage(f, 1400, 0.82)));
+    const newFiles = [...form.photoFiles, ...compressed];
+    const newPreviews = [...form.photoPreviews, ...compressed.map(f => URL.createObjectURL(f))];
     setForm({ ...form, photoFiles: newFiles, photoPreviews: newPreviews });
     e.target.value = "";
   }
