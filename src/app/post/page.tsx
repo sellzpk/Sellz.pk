@@ -495,17 +495,23 @@ function StepDetails({ form, setForm, onNext }: { form: FormData; setForm: (f: F
 
         <div>
           <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">Price (PKR) *</label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-[var(--text-muted)]">Rs</span>
+          <div className="flex items-center rounded-xl border border-[var(--border)] overflow-hidden focus-within:border-[var(--brand-green)] transition-colors" style={{ background: "white" }}>
+            <span className="px-3 self-stretch flex items-center text-sm font-medium border-r border-[var(--border)] select-none flex-shrink-0" style={{ background: "var(--bg)", color: "var(--text-muted)" }}>Rs</span>
             <input
               type="number"
+              inputMode="numeric"
               placeholder="0"
               value={form.price}
-              onChange={e => setForm({ ...form, price: e.target.value })}
-              className="input-base pl-9"
+              onChange={e => setForm({ ...form, price: e.target.value.replace(/[^0-9]/g, "") })}
+              onKeyDown={e => { if (["e", "E", "+", "-", ".", ","].includes(e.key)) e.preventDefault(); }}
+              className="flex-1 px-3 py-3 text-sm outline-none bg-transparent min-w-0"
               min="0"
+              style={{ appearance: "textfield" } as React.CSSProperties}
             />
           </div>
+          {form.price && (
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Rs {Number(form.price).toLocaleString("en-PK")}</p>
+          )}
         </div>
 
         <div>

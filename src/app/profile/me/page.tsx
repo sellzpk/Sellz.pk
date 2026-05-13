@@ -5,17 +5,26 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
-import { AdCard } from "@/components/AdCard";
-import type { Ad } from "@/components/AdCard";
 import { Footer, FooterMobile } from "@/components/Footer";
 import { BadgeVerified } from "@/components/BadgeVerified";
 import {
   ShieldCheck, Clock, ShieldOff, Edit2, Check, X,
-  MapPin, Calendar, Loader2, ArrowLeft,
+  MapPin, Calendar, Loader2, ArrowLeft, LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { mapAdRow, AD_SELECT } from "@/lib/supabase/helpers";
 import type { UserRow } from "@/lib/types";
+
+type MyAd = {
+  id: number;
+  title: string;
+  price: number;
+  city: string | null;
+  status: string;
+  rejection_reason: string | null;
+  created_at: string;
+  ownership_proof_url: string | null;
+  ad_photos: { url: string; order_index: number }[];
+};
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -34,7 +43,7 @@ export default function MyProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserRow | null>(null);
   const [email, setEmail] = useState("");
-  const [ads, setAds] = useState<Ad[]>([]);
+  const [ads, setAds] = useState<MyAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,7 +59,10 @@ export default function MyProfilePage() {
 
       const [{ data: profileData }, { data: adsData }] = await Promise.all([
         supabase.from("users").select("*").eq("id", user.id).single(),
-        supabase.from("ads").select(AD_SELECT).eq("seller_id", user.id).eq("status", "active").order("created_at", { ascending: false }),
+        supabase.from("ads")
+          .select("id, title, price, city, status, rejection_reason, created_at, ownership_proof_url, ad_photos(url, order_index)")
+          .eq("seller_id", user.id)
+          .order("created_at", { ascending: false }),
       ]);
 
       if (profileData) {
@@ -61,7 +73,7 @@ export default function MyProfilePage() {
           whatsapp_number: profileData.whatsapp_number ?? "",
         });
       }
-      if (adsData) setAds(adsData.map(mapAdRow));
+      if (adsData) setAds(adsData as MyAd[]);
       setLoading(false);
     }
     load();
@@ -146,10 +158,14 @@ export default function MyProfilePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[var(--border)]">
+            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-[var(--border)]">
               <div className="text-center">
-                <p className="text-xl font-black" style={{ color: "var(--brand-green)", letterSpacing: "-0.5px" }}>{ads.length}</p>
-                <p className="text-xs text-[var(--text-muted)]">Active Ads</p>
+                <p className="text-xl font-black" style={{ color: "var(--brand-green)", letterSpacing: "-0.5px" }}>{ads.filter(a => a.status === "active").length}</p>
+                <p className="text-xs text-[var(--text-muted)]">Live Ads</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-black" style={{ color: "#F59E0B", letterSpacing: "-0.5px" }}>{ads.filter(a => a.status === "pending").length}</p>
+                <p className="text-xs text-[var(--text-muted)]">Pending</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-black" style={{ color: "var(--brand-green)", letterSpacing: "-0.5px" }}>
@@ -297,27 +313,77 @@ export default function MyProfilePage() {
           </div>
 
           {/* My ads */}
-          {ads.length > 0 && (
-            <section>
-              <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">My Active Ads</h2>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                {ads.map(ad => (
-                  <AdCard key={ad.id} ad={ad} />
-                ))}
+          <section>
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">My Ads</h2>
+            {ads.length === 0 && !loading ? (
+              <div className="card p-8 text-center">
+                <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">No ads yet</p>
+                {profile.cnic_verified ? (
+                  <Link href="/post" className="text-sm" style={{ color: "var(--brand-green)" }}>Post your first ad →</Link>
+                ) : (
+                  <p className="text-xs text-[var(--text-muted)]">Verify your CNIC to start posting</p>
+                )}
               </div>
-            </section>
-          )}
+            ) : (
+              <div className="space-y-3">
+                {ads.map(ad => {
+                  const cover = [...(ad.ad_photos ?? [])].sort((a, b) => a.order_index - b.order_index)[0]?.url;
+                  const statusMap: Record<string, { bg: string; color: string; text: string }> = {
+                    active:   { bg: "var(--brand-green-light)", color: "var(--brand-green)", text: "✓ Live" },
+                    pending:  { bg: "#FFF8E6", color: "#D97706", text: "⏳ Pending Review" },
+                    rejected: { bg: "#FFF0F0", color: "#DC2626", text: "✕ Rejected" },
+                    sold:     { bg: "var(--bg)", color: "var(--text-muted)", text: "Sold" },
+                  };
+                  const s = statusMap[ad.status] ?? statusMap.pending;
+                  return (
+                    <div key={ad.id} className="card p-3 flex gap-3">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-[var(--bg)]">
+                        {cover ? (
+                          <img src={cover} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-[var(--text-muted)]">No photo</div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-sm font-semibold text-[var(--text-primary)] leading-snug line-clamp-2">{ad.title}</p>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: s.bg, color: s.color }}>{s.text}</span>
+                        </div>
+                        <p className="text-sm font-bold mb-1" style={{ color: "var(--brand-green)" }}>Rs {ad.price.toLocaleString("en-PK")}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{relativeTime(ad.created_at)}{ad.city ? ` · ${ad.city}` : ""}</p>
+                        {ad.status === "pending" && (
+                          <div className="mt-2 px-2.5 py-1.5 rounded-lg text-xs" style={{ background: "#FFF8E6", color: "#92640A" }}>
+                            Under review — usually approved within 24 hours
+                          </div>
+                        )}
+                        {ad.status === "rejected" && (
+                          <div className="mt-2 px-2.5 py-1.5 rounded-lg text-xs" style={{ background: "#FFF0F0", color: "#B91C1C" }}>
+                            {ad.rejection_reason ? `Rejected: ${ad.rejection_reason}` : "Ad was rejected."}
+                            {" "}<Link href="/post" style={{ color: "var(--brand-green)" }}>Post again →</Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
-          {ads.length === 0 && !loading && (
-            <div className="card p-8 text-center">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">No active ads yet</p>
-              {profile.cnic_verified ? (
-                <Link href="/post" className="text-sm" style={{ color: "var(--brand-green)" }}>Post your first ad →</Link>
-              ) : (
-                <p className="text-xs text-[var(--text-muted)]">Verify your CNIC to start posting</p>
-              )}
-            </div>
-          )}
+          {/* Sign out */}
+          <div className="pt-2 pb-4">
+            <button
+              onClick={async () => {
+                const supabase = createClient();
+                await supabase.auth.signOut();
+                window.location.href = "/";
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border text-sm font-semibold transition-colors hover:bg-red-50"
+              style={{ borderColor: "#FECACA", color: "#DC2626" }}
+            >
+              <LogOut size={16} strokeWidth={2} /> Sign Out
+            </button>
+          </div>
         </div>
       </main>
 
