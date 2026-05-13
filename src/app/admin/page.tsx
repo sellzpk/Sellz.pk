@@ -103,7 +103,6 @@ export default function AdminPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [pendingAds, setPendingAds] = useState<PendingAd[]>([]);
   const [cnicQueue, setCnicQueue] = useState<CnicUser[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -124,25 +123,26 @@ export default function AdminPage() {
 
   async function loadAll() {
     setLoading(true);
-    setIsAdmin(true);
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
+      const [adsRes, repsRes, countRes, usersRes, cnicsRes, blockedRes] = await Promise.allSettled([
+        fetch("/api/admin/ads-queue").then(r => r.json()),
+        supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
+        supabase.from("users").select("id", { count: "exact", head: true }),
+        supabase.from("users").select("id, full_name, phone, city, created_at, is_admin, cnic_verified, banned").order("created_at", { ascending: false }).limit(50),
+        fetch("/api/admin/cnic-queue").then(r => r.json()),
+        fetch("/api/admin/blocked-users").then(r => r.json()),
+      ]);
 
-    const [adsRes, { data: reps }, { count }, { data: users }, cnicsRes, blockedRes] = await Promise.all([
-      fetch("/api/admin/ads-queue").then(r => r.json()),
-      supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
-      supabase.from("users").select("id", { count: "exact", head: true }),
-      supabase.from("users").select("id, full_name, phone, city, created_at, is_admin, cnic_verified, banned").order("created_at", { ascending: false }).limit(50),
-      fetch("/api/admin/cnic-queue").then(r => r.json()),
-      fetch("/api/admin/blocked-users").then(r => r.json()),
-    ]);
-
-    setPendingAds(Array.isArray(adsRes) ? adsRes : []);
-    setCnicQueue(Array.isArray(cnicsRes) ? cnicsRes : []);
-    setReports((reps as unknown as Report[]) ?? []);
-    setTotalUsers(count ?? 0);
-    setAdminUsers((users as AdminUser[]) ?? []);
-    setBlockedUsers(Array.isArray(blockedRes) ? blockedRes : []);
-    setLoading(false);
+      if (adsRes.status === "fulfilled") setPendingAds(Array.isArray(adsRes.value) ? adsRes.value : []);
+      if (cnicsRes.status === "fulfilled") setCnicQueue(Array.isArray(cnicsRes.value) ? cnicsRes.value : []);
+      if (blockedRes.status === "fulfilled") setBlockedUsers(Array.isArray(blockedRes.value) ? blockedRes.value : []);
+      if (repsRes.status === "fulfilled") setReports((repsRes.value.data as unknown as Report[]) ?? []);
+      if (countRes.status === "fulfilled") setTotalUsers(countRes.value.count ?? 0);
+      if (usersRes.status === "fulfilled") setAdminUsers((usersRes.value.data as AdminUser[]) ?? []);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function approveAd(id: number) {
@@ -213,14 +213,10 @@ export default function AdminPage() {
   }
 
   async function logout() {
+    sessionStorage.removeItem("sellz_admin_auth");
     await fetch("/api/admin/logout", { method: "POST" });
     router.push("/admin/login");
-    router.refresh();
   }
-
-  useEffect(() => {
-    if (isAdmin === false) router.replace("/admin/login");
-  }, [isAdmin, router]);
 
   const filteredUsers = adminUsers.filter(u =>
     !userSearch || (u.full_name ?? "").toLowerCase().includes(userSearch.toLowerCase()) || (u.phone ?? "").includes(userSearch)
@@ -233,8 +229,6 @@ export default function AdminPage() {
       </div>
     );
   }
-
-  if (isAdmin === false) return null;
 
   return (
     <>

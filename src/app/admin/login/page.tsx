@@ -24,6 +24,7 @@ export default function AdminLoginPage() {
     });
 
     if (res.ok) {
+      sessionStorage.setItem("sellz_admin_auth", "true");
       router.push("/admin");
       router.refresh();
     } else {
