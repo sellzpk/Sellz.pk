@@ -112,9 +112,10 @@ export default function PostAdPage() {
     if (form.ownershipDocFile) {
       const ext = form.ownershipDocFile.name.split(".").pop() ?? "jpg";
       const path = `${user.id}/ownership_${Date.now()}.${ext}`;
+      const ownershipBuf = await form.ownershipDocFile.arrayBuffer();
       const { error: upErr } = await supabase.storage
         .from("ad-photos")
-        .upload(path, form.ownershipDocFile, { contentType: form.ownershipDocFile.type });
+        .upload(path, ownershipBuf, { contentType: form.ownershipDocFile.type, upsert: true });
       if (!upErr) {
         const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
         ownershipUrl = urlData.publicUrl;
@@ -154,9 +155,11 @@ export default function PostAdPage() {
       setUploadProgress(`Uploading photo ${i + 1} of ${form.photoFiles.length}...`);
       const ext = file.name.split(".").pop() ?? "jpg";
       const path = `${user.id}/${adData.id}_${i}_${Date.now()}.${ext}`;
+      if (file.size > 10 * 1024 * 1024) { setSubmitError(`Photo ${i + 1} is too large — max 10MB`); setSubmitting(false); return; }
+      const buf = await file.arrayBuffer();
       const { error: upErr } = await supabase.storage
         .from("ad-photos")
-        .upload(path, file, { contentType: file.type });
+        .upload(path, buf, { contentType: file.type, upsert: true });
       if (!upErr) {
         const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
         photoUrls.push(urlData.publicUrl);

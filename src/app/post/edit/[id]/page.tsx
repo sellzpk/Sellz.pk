@@ -172,7 +172,9 @@ export default function EditAdPage() {
       setUploadProgress(`Uploading photo ${i + 1} of ${newPhotoFiles.length}…`);
       const file = newPhotoFiles[i];
       const path = `${userId}/${id}_edit_${Date.now()}_${i}.jpg`;
-      const { error: upErr } = await supabase.storage.from("ad-photos").upload(path, file, { contentType: "image/jpeg" });
+      if (file.size > 10 * 1024 * 1024) { setSubmitError(`Photo ${i + 1} is too large — max 10MB`); setSubmitting(false); setUploadProgress(""); return; }
+      const buf = await file.arrayBuffer();
+      const { error: upErr } = await supabase.storage.from("ad-photos").upload(path, buf, { contentType: "image/jpeg", upsert: true });
       if (upErr) {
         setSubmitError(`Failed to upload photo ${i + 1}: ${upErr.message}`);
         setSubmitting(false);

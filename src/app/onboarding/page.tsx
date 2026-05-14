@@ -432,9 +432,10 @@ function CnicCapture({
       const ext = file.name.split(".").pop() || "jpg";
       const path = `${userId}/${type}-${Date.now()}.${ext}`;
       const supabase = createClient();
+      const buf = await file.arrayBuffer();
       const { error } = await supabase.storage
         .from("cnic-documents")
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, buf, { upsert: true, contentType: file.type });
       if (error) throw error;
       onCapture(path); // store path, not URL
       setUploaded(true);
