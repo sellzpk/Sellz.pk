@@ -18,6 +18,8 @@ type PendingAd = {
   price: number;
   city: string | null;
   created_at: string;
+  edit_count: number | null;
+  edited_at: string | null;
   ownership_proof_url: string | null;
   ad_photos: { url: string; order_index: number }[];
   users: { full_name: string | null; cnic_verified: boolean } | null;
@@ -435,6 +437,11 @@ export default function AdminPage() {
                               {ad.city && <span className="flex items-center gap-1"><MapPin size={11} />{ad.city}</span>}
                               <span className="flex items-center gap-1"><Clock size={11} />{relTime(ad.created_at)}</span>
                             </div>
+                            {(ad.edit_count ?? 0) > 0 && (
+                              <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+                                ✏️ Edited {ad.edit_count}× — {relTime(ad.edited_at!)}
+                              </div>
+                            )}
                           </div>
                           <p className="text-base font-bold text-[var(--text-primary)] whitespace-nowrap">
                             Rs {ad.price >= 100000 ? `${(ad.price / 100000).toFixed(1)}L` : `${(ad.price / 1000).toFixed(0)}k`}

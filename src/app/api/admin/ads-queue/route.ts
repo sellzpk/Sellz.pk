@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data: ads, error } = await supabaseAdmin
     .from("ads")
-    .select("id, title, price, city, created_at, ownership_proof_url, seller_id")
+    .select("id, title, price, city, created_at, ownership_proof_url, seller_id, edit_count, edited_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 

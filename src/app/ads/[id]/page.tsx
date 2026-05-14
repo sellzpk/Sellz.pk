@@ -263,6 +263,14 @@ export default function AdDetailPage() {
                   )}
                 </div>
 
+                {/* Sold banner */}
+                {ad.status === "sold" && (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>🎉</span>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#DC2626", margin: 0 }}>This item has been sold</p>
+                  </div>
+                )}
+
                 {/* Price */}
                 <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-1px", marginBottom: 6 }}>
                   {formatPrice(ad.price)}
@@ -338,46 +346,55 @@ export default function AdDetailPage() {
             {/* RIGHT: sticky sidebar */}
             <div className="hidden md:block px-0">
               <div style={{ position: "sticky", top: 80 }}>
-                {/* Send Message */}
-                <button
-                  onClick={() => setChatOpen(true)}
-                  className="btn-primary w-full justify-center"
-                  style={{ padding: "14px 16px", borderRadius: 10, fontSize: 15, marginBottom: 10 }}
-                >
-                  <MessageCircle size={18} strokeWidth={2} />
-                  Send Message
-                </button>
-
-                {/* WhatsApp / View Number */}
-                {hasWhatsapp && waNumber ? (
-                  numberRevealed ? (
-                    <a
-                      href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full rounded-xl border font-medium text-sm transition-colors"
-                      style={{ padding: "13px 16px", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", marginBottom: 20, textDecoration: "none" }}
-                    >
-                      <WaIcon size={16} color="var(--brand-green)" />
-                      {formatWaDisplay(waNumber)} · Open WhatsApp →
-                    </a>
-                  ) : (
-                    <button
-                      onClick={handleViewNumber}
-                      className="flex items-center justify-center gap-2 w-full rounded-xl border font-medium text-sm"
-                      style={{
-                        padding: "13px 16px", marginBottom: 20,
-                        ...(chatStarted
-                          ? { borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }
-                          : { borderColor: "var(--border)", color: "var(--text-muted)", cursor: "not-allowed" }),
-                      }}
-                    >
-                      {chatStarted ? <Phone size={16} strokeWidth={2} /> : <Lock size={16} strokeWidth={2} />}
-                      View Number{!chatStarted && <span style={{ fontSize: 11, opacity: 0.6 }}>— chat first</span>}
-                    </button>
-                  )
+                {ad.status === "sold" ? (
+                  <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "14px 16px", marginBottom: 20, textAlign: "center" }}>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: "#DC2626", margin: "0 0 4px" }}>Item Sold</p>
+                    <p style={{ fontSize: 13, color: "#991B1B", margin: 0 }}>This item is no longer available</p>
+                  </div>
                 ) : (
-                  <div style={{ marginBottom: 20 }} />
+                  <>
+                    {/* Send Message */}
+                    <button
+                      onClick={() => setChatOpen(true)}
+                      className="btn-primary w-full justify-center"
+                      style={{ padding: "14px 16px", borderRadius: 10, fontSize: 15, marginBottom: 10 }}
+                    >
+                      <MessageCircle size={18} strokeWidth={2} />
+                      Send Message
+                    </button>
+
+                    {/* WhatsApp / View Number */}
+                    {hasWhatsapp && waNumber ? (
+                      numberRevealed ? (
+                        <a
+                          href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 w-full rounded-xl border font-medium text-sm transition-colors"
+                          style={{ padding: "13px 16px", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", marginBottom: 20, textDecoration: "none" }}
+                        >
+                          <WaIcon size={16} color="var(--brand-green)" />
+                          {formatWaDisplay(waNumber)} · Open WhatsApp →
+                        </a>
+                      ) : (
+                        <button
+                          onClick={handleViewNumber}
+                          className="flex items-center justify-center gap-2 w-full rounded-xl border font-medium text-sm"
+                          style={{
+                            padding: "13px 16px", marginBottom: 20,
+                            ...(chatStarted
+                              ? { borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }
+                              : { borderColor: "var(--border)", color: "var(--text-muted)", cursor: "not-allowed" }),
+                          }}
+                        >
+                          {chatStarted ? <Phone size={16} strokeWidth={2} /> : <Lock size={16} strokeWidth={2} />}
+                          View Number{!chatStarted && <span style={{ fontSize: 11, opacity: 0.6 }}>— chat first</span>}
+                        </button>
+                      )
+                    ) : (
+                      <div style={{ marginBottom: 20 }} />
+                    )}
+                  </>
                 )}
 
                 {/* Seller card */}
@@ -439,40 +456,49 @@ export default function AdDetailPage() {
 
       {/* Mobile sticky bottom bar */}
       <div className="md:hidden fixed left-0 right-0 bg-white border-t border-[var(--border)] px-4 py-3 z-20 flex gap-2" style={{ bottom: 56, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
-        <button
-          onClick={() => setChatOpen(true)}
-          className="btn-primary justify-center flex-1"
-          style={{ padding: "13px 16px", borderRadius: 10, fontSize: 15 }}
-        >
-          <MessageCircle size={18} strokeWidth={2} /> Send Message
-        </button>
-
-        {hasWhatsapp && waNumber ? (
-          numberRevealed ? (
-            <a
-              href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
-              style={{ flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", textDecoration: "none" }}
-            >
-              <WaIcon size={16} color="var(--brand-green)" /> WhatsApp
-            </a>
-          ) : (
-            <button
-              onClick={handleViewNumber}
-              className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
-              style={chatStarted
-                ? { flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }
-                : { flex: "0 0 38%", borderColor: "var(--border)", color: "var(--text-muted)", cursor: "default" }
-              }
-            >
-              {chatStarted ? <Phone size={15} strokeWidth={2} /> : <Lock size={15} strokeWidth={2} />}
-              View No.
-            </button>
-          )
+        {ad.status === "sold" ? (
+          <div className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3" style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}>
+            <span style={{ fontSize: 16 }}>🎉</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#B91C1C" }}>Item Sold</span>
+          </div>
         ) : (
-          <div style={{ flex: "0 0 38%" }} />
+          <>
+            <button
+              onClick={() => setChatOpen(true)}
+              className="btn-primary justify-center flex-1"
+              style={{ padding: "13px 16px", borderRadius: 10, fontSize: 15 }}
+            >
+              <MessageCircle size={18} strokeWidth={2} /> Send Message
+            </button>
+
+            {hasWhatsapp && waNumber ? (
+              numberRevealed ? (
+                <a
+                  href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
+                  style={{ flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", textDecoration: "none" }}
+                >
+                  <WaIcon size={16} color="var(--brand-green)" /> WhatsApp
+                </a>
+              ) : (
+                <button
+                  onClick={handleViewNumber}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
+                  style={chatStarted
+                    ? { flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }
+                    : { flex: "0 0 38%", borderColor: "var(--border)", color: "var(--text-muted)", cursor: "default" }
+                  }
+                >
+                  {chatStarted ? <Phone size={15} strokeWidth={2} /> : <Lock size={15} strokeWidth={2} />}
+                  View No.
+                </button>
+              )
+            ) : (
+              <div style={{ flex: "0 0 38%" }} />
+            )}
+          </>
         )}
       </div>
 

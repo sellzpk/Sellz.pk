@@ -10,6 +10,7 @@ import { BadgeVerified } from "@/components/BadgeVerified";
 import {
   ShieldCheck, Clock, ShieldOff, Edit2, Check, X,
   MapPin, Calendar, Loader2, ArrowLeft, LogOut,
+  Pencil, Trash2, CheckCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRow } from "@/lib/types";
@@ -23,6 +24,7 @@ type MyAd = {
   rejection_reason: string | null;
   created_at: string;
   ownership_proof_url: string | null;
+  edit_count: number;
   ad_photos: { url: string; order_index: number }[];
 };
 
@@ -43,11 +45,13 @@ export default function MyProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserRow | null>(null);
   const [email, setEmail] = useState("");
+  const [userId, setUserId] = useState("");
   const [ads, setAds] = useState<MyAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [actioning, setActioning] = useState<string | null>(null);
   const [form, setForm] = useState({ full_name: "", phone: "", whatsapp_number: "" });
 
   useEffect(() => {
@@ -56,11 +60,12 @@ export default function MyProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.replace("/auth/login"); return; }
       setEmail(user.email ?? "");
+      setUserId(user.id);
 
       const [{ data: profileData }, { data: adsData }] = await Promise.all([
         supabase.from("users").select("*").eq("id", user.id).single(),
         supabase.from("ads")
-          .select("id, title, price, city, status, rejection_reason, created_at, ownership_proof_url, ad_photos(url, order_index)")
+          .select("id, title, price, city, status, rejection_reason, created_at, ownership_proof_url, edit_count, ad_photos(url, order_index)")
           .eq("seller_id", user.id)
           .order("created_at", { ascending: false }),
       ]);
@@ -96,6 +101,25 @@ export default function MyProfilePage() {
     if (error) { setSaveError("Failed to save. Try again."); return; }
     setProfile(p => p ? { ...p, ...form } : p);
     setEditing(false);
+  }
+
+  async function handleMarkSold(adId: number) {
+    if (!confirm("Mark this ad as sold? It will be removed from active listings.")) return;
+    setActioning(`sold-${adId}`);
+    const supabase = createClient();
+    await supabase.from("ads").update({ status: "sold" }).eq("id", adId).eq("seller_id", userId);
+    setAds(prev => prev.map(a => a.id === adId ? { ...a, status: "sold" } : a));
+    setActioning(null);
+  }
+
+  async function handleDelete(adId: number) {
+    if (!confirm("Delete this ad? This cannot be undone.")) return;
+    setActioning(`del-${adId}`);
+    const supabase = createClient();
+    await supabase.from("ad_photos").delete().eq("ad_id", adId);
+    await supabase.from("ads").delete().eq("id", adId).eq("seller_id", userId);
+    setAds(prev => prev.filter(a => a.id !== adId));
+    setActioning(null);
   }
 
   if (loading) {
@@ -359,9 +383,38 @@ export default function MyProfilePage() {
                         {ad.status === "rejected" && (
                           <div className="mt-2 px-2.5 py-1.5 rounded-lg text-xs" style={{ background: "#FFF0F0", color: "#B91C1C" }}>
                             {ad.rejection_reason ? `Rejected: ${ad.rejection_reason}` : "Ad was rejected."}
-                            {" "}<Link href="/post" style={{ color: "var(--brand-green)" }}>Post again →</Link>
                           </div>
                         )}
+                        {/* Action buttons */}
+                        <div className="flex gap-2 flex-wrap mt-2.5">
+                          {["active", "pending", "rejected"].includes(ad.status) && (
+                            <button
+                              onClick={() => router.push(`/post/edit/${ad.id}`)}
+                              className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors"
+                              style={{ borderColor: "var(--border)", color: "var(--text-secondary)", background: "var(--bg)" }}
+                            >
+                              <Pencil size={12} strokeWidth={2} /> Edit
+                            </button>
+                          )}
+                          {ad.status === "active" && (
+                            <button
+                              onClick={() => handleMarkSold(ad.id)}
+                              disabled={actioning === `sold-${ad.id}`}
+                              className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50"
+                              style={{ borderColor: "#818CF8", color: "#6366F1", background: "#F0F0FF" }}
+                            >
+                              <CheckCheck size={12} strokeWidth={2} /> Mark as Sold
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(ad.id)}
+                            disabled={actioning === `del-${ad.id}`}
+                            className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50"
+                            style={{ borderColor: "#FECACA", color: "#DC2626", background: "#FFF0F0" }}
+                          >
+                            <Trash2 size={12} strokeWidth={2} /> Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

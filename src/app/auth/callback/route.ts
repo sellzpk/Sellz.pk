@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from("users")
-          .select("id")
+          .select("id, city")
           .eq("id", user.id)
           .single();
         if (!profile) {
@@ -25,6 +25,9 @@ export async function GET(request: Request) {
             full_name: fullName,
             email: user.email,
           });
+          return NextResponse.redirect(`${siteUrl}/onboarding`);
+        }
+        if (!profile.city) {
           return NextResponse.redirect(`${siteUrl}/onboarding`);
         }
       }

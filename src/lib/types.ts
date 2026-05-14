@@ -41,6 +41,8 @@ export interface Database {
           status: "pending" | "active" | "rejected" | "sold" | "expired";
           ownership_proof_url: string | null;
           details: Record<string, unknown> | null;
+          edited_at: string | null;
+          edit_count: number;
           views: number;
           created_at: string;
           expires_at: string;
