@@ -65,6 +65,7 @@ export default function MyAdsPage() {
   const [ads, setAds] = useState<MyAd[]>([]);
   const [counts, setCounts] = useState<Counts>({ all: 0, active: 0, pending: 0, rejected: 0, sold: 0 });
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
@@ -73,6 +74,16 @@ export default function MyAdsPage() {
       setUser(user);
     });
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("updated") === "true") {
+      setToast("✅ Ad updated — submitted for review");
+      window.history.replaceState({}, "", "/my-ads");
+      setTimeout(() => setToast(""), 4000);
+    }
+  }, []);
 
   const fetchCounts = useCallback(async (uid: string) => {
     const { data } = await createClient().from("ads").select("status").eq("seller_id", uid);
@@ -180,6 +191,13 @@ export default function MyAdsPage() {
           ))}
         </div>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", top: 72, left: "50%", transform: "translateX(-50%)", zIndex: 50, background: "#1D9E75", color: "white", padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", whiteSpace: "nowrap" }}>
+          {toast}
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ padding: 16, paddingBottom: 88 }}>
