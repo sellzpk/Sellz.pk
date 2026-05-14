@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-const TABS = ["Dashboard", "Ad Queue", "CNIC Queue", "Users", "Reports", "Location Requests", "Blocked Users"];
+const TABS = ["Dashboard", "Ad Queue", "Active Ads", "CNIC Queue", "Users", "Reports", "Location Requests", "Blocked Users"];
 
 type PendingAd = {
   id: number;
@@ -48,6 +48,18 @@ type BlockedUser = {
   cnic_front_signed: string | null;
   cnic_back_signed: string | null;
   selfie_signed: string | null;
+};
+
+type ActiveAd = {
+  id: number;
+  title: string;
+  price: number;
+  city: string | null;
+  category: string;
+  subcategory: string | null;
+  created_at: string;
+  seller_id: string;
+  ad_photos: { url: string }[];
 };
 
 type Report = {
@@ -118,6 +130,8 @@ export default function AdminPage() {
   const [rejectingAdId, setRejectingAdId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [activeAds, setActiveAds] = useState<ActiveAd[]>([]);
+  const [activeAdsSearch, setActiveAdsSearch] = useState("");
 
   useEffect(() => { loadAll(); }, []);
 
@@ -150,15 +164,17 @@ export default function AdminPage() {
       setBlockedUsers(Array.isArray(blockedData) ? blockedData : []);
 
       // Supabase client calls (anon key — may have partial data due to RLS)
-      const [repsRes, countRes, usersRes] = await Promise.allSettled([
+      const [repsRes, countRes, usersRes, activeAdsRes] = await Promise.allSettled([
         supabase.from("reports").select("id, reason, status, created_at, ads(title)").eq("status", "open").order("created_at", { ascending: false }),
         supabase.from("users").select("id", { count: "exact", head: true }),
         supabase.from("users").select("id, full_name, phone, city, created_at, is_admin, cnic_verified, banned").order("created_at", { ascending: false }).limit(50),
+        supabase.from("ads").select("id, title, price, city, category, subcategory, created_at, seller_id, ad_photos(url)").eq("status", "active").order("created_at", { ascending: false }),
       ]);
 
       if (repsRes.status === "fulfilled") setReports((repsRes.value.data as unknown as Report[]) ?? []);
       if (countRes.status === "fulfilled") setTotalUsers(countRes.value.count ?? 0);
       if (usersRes.status === "fulfilled") setAdminUsers((usersRes.value.data as AdminUser[]) ?? []);
+      if (activeAdsRes.status === "fulfilled") setActiveAds((activeAdsRes.value.data as unknown as ActiveAd[]) ?? []);
     } finally {
       setLoading(false);
     }
@@ -330,11 +346,12 @@ export default function AdminPage() {
           {activeTab === "Dashboard" && (
             <div>
               <h1 className="text-xl font-bold text-[var(--text-primary)] mb-6">Dashboard</h1>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <StatCard icon={<FileText size={20} strokeWidth={2} />} value={pendingAds.length} label="Pending Ads" color="green" />
-                <StatCard icon={<Shield size={20} strokeWidth={2} />} value={cnicQueue.length} label="CNIC Verifications" color="blue" />
-                <StatCard icon={<Flag size={20} strokeWidth={2} />} value={reports.length} label="Active Reports" color="red" />
-                <StatCard icon={<Users size={20} strokeWidth={2} />} value={totalUsers} label="Total Users" color="gray" />
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                <StatCard icon={<FileText size={20} strokeWidth={2} />} value={pendingAds.length} label="Pending Ads" color="green" onClick={() => setActiveTab("Ad Queue")} />
+                <StatCard icon={<CheckCircle size={20} strokeWidth={2} />} value={activeAds.length} label="Active Ads" color="teal" onClick={() => setActiveTab("Active Ads")} />
+                <StatCard icon={<Shield size={20} strokeWidth={2} />} value={cnicQueue.length} label="CNIC Verifications" color="blue" onClick={() => setActiveTab("CNIC Queue")} />
+                <StatCard icon={<Flag size={20} strokeWidth={2} />} value={reports.length} label="Active Reports" color="red" onClick={() => setActiveTab("Reports")} />
+                <StatCard icon={<Users size={20} strokeWidth={2} />} value={totalUsers} label="Total Users" color="gray" onClick={() => setActiveTab("Users")} />
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -519,6 +536,78 @@ export default function AdminPage() {
               )}
             </div>
           )}
+
+          {activeTab === "Active Ads" && (() => {
+            const q = activeAdsSearch.toLowerCase();
+            const filtered = activeAds.filter(a =>
+              !q || a.title.toLowerCase().includes(q) || (a.city ?? "").toLowerCase().includes(q) || a.category.toLowerCase().includes(q)
+            );
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-5">
+                  <h1 className="text-xl font-bold text-[var(--text-primary)]">Active Ads</h1>
+                  <span className="text-sm text-[var(--text-muted)]">{activeAds.length} live</span>
+                </div>
+
+                <div className="relative mb-4">
+                  <Search size={14} strokeWidth={2} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input
+                    type="text"
+                    placeholder="Search by title, city, category…"
+                    value={activeAdsSearch}
+                    onChange={e => setActiveAdsSearch(e.target.value)}
+                    className="input-base pl-8 text-sm"
+                  />
+                </div>
+
+                {filtered.length === 0 ? (
+                  <div className="card p-8 text-center">
+                    <p className="text-sm text-[var(--text-muted)]">No active ads found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {filtered.map(ad => {
+                      const thumb = ad.ad_photos[0]?.url ?? null;
+                      const price = ad.price >= 100000
+                        ? `Rs ${(ad.price / 100000).toFixed(ad.price % 100000 === 0 ? 0 : 1)}L`
+                        : ad.price >= 1000 ? `Rs ${(ad.price / 1000).toFixed(0)}k`
+                        : `Rs ${ad.price.toLocaleString()}`;
+                      return (
+                        <div key={ad.id} className="card p-3 flex items-center gap-3">
+                          <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-[var(--bg)]">
+                            {thumb
+                              ? <img src={thumb} alt="" className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)]"><Eye size={18} strokeWidth={1.5} /></div>
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">{ad.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-xs font-semibold" style={{ color: "var(--brand-green)" }}>{price}</span>
+                              {ad.city && <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-0.5"><MapPin size={10} />{ad.city}</span>}
+                              <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded-full capitalize">{ad.subcategory ?? ad.category}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-[10px] text-[var(--text-muted)] hidden sm:block">{relTime(ad.created_at)}</span>
+                            <a
+                              href={`/ads/${ad.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg hover:bg-[var(--bg)] transition-colors"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              <Eye size={15} strokeWidth={2} />
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {activeTab === "CNIC Queue" && (
             <div>
@@ -886,11 +975,11 @@ export default function AdminPage() {
   );
 }
 
-function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
-  const colors: Record<string, string> = { green: "var(--brand-green-light)", blue: "#eff6ff", red: "#fef2f2", gray: "var(--bg)" };
-  const textColors: Record<string, string> = { green: "var(--brand-green)", blue: "#3b82f6", red: "#e53e3e", gray: "var(--text-primary)" };
+function StatCard({ icon, value, label, color, onClick }: { icon: React.ReactNode; value: number; label: string; color: string; onClick?: () => void }) {
+  const colors: Record<string, string> = { green: "var(--brand-green-light)", teal: "#ccfbf1", blue: "#eff6ff", red: "#fef2f2", gray: "var(--bg)" };
+  const textColors: Record<string, string> = { green: "var(--brand-green)", teal: "#0d9488", blue: "#3b82f6", red: "#e53e3e", gray: "var(--text-primary)" };
   return (
-    <div className="card p-4">
+    <div className={`card p-4${onClick ? " cursor-pointer hover:border-[var(--brand-green)] transition-colors" : ""}`} onClick={onClick}>
       <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: colors[color], color: textColors[color] }}>{icon}</div>
       <p className="text-2xl font-black text-[var(--text-primary)] mb-0.5" style={{ letterSpacing: "-0.5px" }}>{value}</p>
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
