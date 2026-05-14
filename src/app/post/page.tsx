@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
+import { SelectWithOther } from "@/components/SelectWithOther";
 import { ArrowLeft, Camera, ChevronRight, Check, X, Upload, AlertCircle, Loader2, FileImage } from "lucide-react";
 import { CATEGORIES, CONDITIONS, getSubcategoryFields } from "@/lib/categories";
 import { getAreas } from "@/lib/locations";
@@ -612,15 +613,7 @@ function TextField({ label, value, onChange, placeholder, inputMode }: {
 function SelectField({ label, value, onChange, options, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; options: string[]; placeholder?: string;
 }) {
-  return (
-    <div>
-      <label className="text-sm font-semibold text-[var(--text-primary)] mb-1.5 block">{label}</label>
-      <select value={value} onChange={e => onChange(e.target.value)} className="input-base">
-        <option value="">{placeholder ?? "Select..."}</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
+  return <SelectWithOther label={label} value={value} onChange={onChange} options={options} placeholder={placeholder} />;
 }
 
 function ToggleField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {

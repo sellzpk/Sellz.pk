@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CONDITIONS, getSubcategoryFields } from "@/lib/categories";
 import { getAreas } from "@/lib/locations";
 import { BottomNav } from "@/components/BottomNav";
+import { SelectWithOther } from "@/components/SelectWithOther";
 
 async function compressImage(file: File, maxPx = 1400, quality = 0.82): Promise<File> {
   return new Promise(resolve => {
@@ -152,6 +153,8 @@ export default function EditAdPage() {
         details: Object.keys(form.details).length > 0 ? form.details : null,
         status: "pending",
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rejection_reason: null as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         edited_at: new Date().toISOString() as any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         edit_count: ((ad?.edit_count ?? 0) + 1) as any,
@@ -170,14 +173,19 @@ export default function EditAdPage() {
       const file = newPhotoFiles[i];
       const path = `${userId}/${id}_edit_${Date.now()}_${i}.jpg`;
       const { error: upErr } = await supabase.storage.from("ad-photos").upload(path, file, { contentType: "image/jpeg" });
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
-        await supabase.from("ad_photos").insert({ ad_id: Number(id), url: urlData.publicUrl, order_index: existingPhotos.length + i });
+      if (upErr) {
+        setSubmitError(`Failed to upload photo ${i + 1}: ${upErr.message}`);
+        setSubmitting(false);
+        setUploadProgress("");
+        return;
       }
+      const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
+      await supabase.from("ad_photos").insert({ ad_id: Number(id), url: urlData.publicUrl, order_index: existingPhotos.length + i });
     }
 
+    setUploadProgress("");
     setSubmitting(false);
-    router.push("/profile/me");
+    router.push("/my-ads?updated=true");
   }
 
   if (loading) {
@@ -241,13 +249,14 @@ export default function EditAdPage() {
                 }
                 if (field.type === "select") {
                   return (
-                    <div key={field.key}>
-                      <label className="text-sm font-semibold block mb-1.5" style={{ color: "var(--text-primary)" }}>{field.label}</label>
-                      <select value={(form.details[field.key] as string) ?? ""} onChange={e => setDetail(field.key, e.target.value)} className="input-base">
-                        <option value="">Select {field.label.toLowerCase()}</option>
-                        {field.options!.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    </div>
+                    <SelectWithOther
+                      key={field.key}
+                      label={field.label}
+                      value={(form.details[field.key] as string) ?? ""}
+                      onChange={v => setDetail(field.key, v)}
+                      options={field.options!}
+                      placeholder={`Select ${field.label.toLowerCase()}`}
+                    />
                   );
                 }
                 return (
