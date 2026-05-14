@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, Clock, Users, FileText, Flag,
   Search, ChevronRight, Eye, AlertTriangle, MapPin, Shield,
   Camera, CreditCard, ScanFace, Loader2, LogOut, X, Ban,
-  ShieldCheck, ShieldOff,
+  ShieldCheck, ShieldOff, Trash2, RefreshCw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -17,6 +17,8 @@ type PendingAd = {
   title: string;
   price: number;
   city: string | null;
+  status: string;
+  rejection_reason: string | null;
   created_at: string;
   edit_count: number | null;
   edited_at: string | null;
@@ -134,8 +136,19 @@ export default function AdminPage() {
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [activeAds, setActiveAds] = useState<ActiveAd[]>([]);
   const [activeAdsSearch, setActiveAdsSearch] = useState("");
+  const [queueTab, setQueueTab] = useState<"pending" | "active" | "rejected" | "sold">("pending");
+  const [queueAds, setQueueAds] = useState<PendingAd[]>([]);
 
   useEffect(() => { loadAll(); }, []);
+
+  useEffect(() => {
+    if (queueTab !== "pending") {
+      fetch(`/api/admin/ads-queue?status=${queueTab}`)
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setQueueAds(Array.isArray(data) ? data : []));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueTab]);
 
   async function loadAll() {
     setLoading(true);
@@ -204,6 +217,35 @@ export default function AdminPage() {
       setPendingAds(prev => prev.filter(a => a.id !== id));
       setRejectingAdId(null);
       setRejectReason("");
+    }
+    setActioning(null);
+  }
+
+  async function adminUpdateStatus(adId: number, newStatus: string, reason?: string) {
+    setActioning(`admin-${adId}`);
+    const res = await fetch("/api/admin/update-ad-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adId, status: newStatus, reason }),
+    });
+    if (res.ok) {
+      if (queueTab === "pending") setPendingAds(prev => prev.filter(a => a.id !== adId));
+      else setQueueAds(prev => prev.filter(a => a.id !== adId));
+    }
+    setActioning(null);
+  }
+
+  async function adminDeleteAd(adId: number) {
+    if (!confirm("Permanently delete this ad?")) return;
+    setActioning(`admin-del-${adId}`);
+    const res = await fetch("/api/admin/update-ad-status", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adId }),
+    });
+    if (res.ok) {
+      if (queueTab === "pending") setPendingAds(prev => prev.filter(a => a.id !== adId));
+      else setQueueAds(prev => prev.filter(a => a.id !== adId));
     }
     setActioning(null);
   }
@@ -407,19 +449,47 @@ export default function AdminPage() {
 
           {activeTab === "Ad Queue" && (
             <div>
-              <div className="flex items-center justify-between mb-5">
-                <h1 className="text-xl font-bold text-[var(--text-primary)]">Ad Approval Queue</h1>
-                <span className="text-sm text-[var(--text-muted)]">{pendingAds.length} pending</span>
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-xl font-bold text-[var(--text-primary)]">Ad Queue</h1>
+                <span className="text-sm text-[var(--text-muted)]">
+                  {queueTab === "pending" ? pendingAds.length : queueAds.length} ads
+                </span>
               </div>
-              {pendingAds.length === 0 ? (
+
+              {/* Queue status tabs */}
+              <div className="flex gap-2 mb-5 flex-wrap">
+                {(["pending", "active", "rejected", "sold"] as const).map(t => {
+                  const colors: Record<string, string> = { pending: "#F59E0B", active: "#1D9E75", rejected: "#EF4444", sold: "#6366F1" };
+                  const active = queueTab === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setQueueTab(t)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors"
+                      style={{
+                        border: `1px solid ${active ? colors[t] : "var(--border)"}`,
+                        background: active ? colors[t] : "white",
+                        color: active ? "white" : "var(--text-muted)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {t === "active" ? "Active" : t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(() => {
+                const displayAds = queueTab === "pending" ? pendingAds : queueAds;
+                return displayAds.length === 0 ? (
                 <div className="card p-8 text-center">
                   <CheckCircle size={32} strokeWidth={1.5} className="mx-auto mb-3 text-[var(--brand-green)]" />
                   <p className="text-sm font-semibold text-[var(--text-primary)]">All caught up!</p>
-                  <p className="text-xs text-[var(--text-muted)]">No ads pending review</p>
+                  <p className="text-xs text-[var(--text-muted)]">No {queueTab} ads</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {pendingAds.map(ad => {
+                  {displayAds.map(ad => {
                     const isApprov = actioning === `ad-${ad.id}`;
                     const isRejecting = rejectingAdId === ad.id;
                     const isConfirmingReject = actioning === `ad-rej-${ad.id}`;
@@ -516,23 +586,54 @@ export default function AdminPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => approveAd(ad.id)}
-                              disabled={!!actioning}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors disabled:opacity-50"
-                            >
-                              {isApprov ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} strokeWidth={2} />} Approve
-                            </button>
-                            <button
-                              onClick={() => setRejectingAdId(ad.id)}
-                              disabled={!!actioning}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
-                            >
-                              <XCircle size={15} strokeWidth={2} /> Reject
-                            </button>
+                          <div className="flex gap-2 flex-wrap">
+                            {queueTab !== "active" && queueTab !== "sold" && (
+                              <button
+                                onClick={() => queueTab === "pending" ? approveAd(ad.id) : adminUpdateStatus(ad.id, "active")}
+                                disabled={!!actioning}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--brand-green-light)] text-[var(--brand-green)] text-sm font-semibold hover:bg-[var(--brand-green)] hover:text-white transition-colors disabled:opacity-50"
+                              >
+                                {isApprov ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle size={15} strokeWidth={2} />} Approve
+                              </button>
+                            )}
+                            {queueTab !== "rejected" && (
+                              <button
+                                onClick={() => setRejectingAdId(ad.id)}
+                                disabled={!!actioning}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                              >
+                                <XCircle size={15} strokeWidth={2} /> Reject
+                              </button>
+                            )}
+                            {queueTab === "active" && (
+                              <button
+                                onClick={() => adminUpdateStatus(ad.id, "sold")}
+                                disabled={!!actioning}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+                                style={{ background: "#F0F0FF", color: "#6366F1", border: "1px solid #C7D2FE" }}
+                              >
+                                🎉 Mark Sold
+                              </button>
+                            )}
+                            {queueTab === "sold" && (
+                              <button
+                                onClick={() => adminUpdateStatus(ad.id, "pending")}
+                                disabled={!!actioning}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+                                style={{ background: "var(--brand-green-light)", color: "var(--brand-green)", border: "1px solid var(--brand-green)" }}
+                              >
+                                <RefreshCw size={14} strokeWidth={2} /> Relist
+                              </button>
+                            )}
                             <button onClick={() => setLightboxUrl(sortedPhotos[0]?.url ?? null)} className="px-3 py-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg)]">
                               <Eye size={15} strokeWidth={2} />
+                            </button>
+                            <button
+                              onClick={() => adminDeleteAd(ad.id)}
+                              disabled={!!actioning}
+                              className="ml-auto px-3 py-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-600 hover:text-white transition-colors disabled:opacity-50"
+                            >
+                              <Trash2 size={15} strokeWidth={2} />
                             </button>
                           </div>
                         )}
@@ -540,7 +641,8 @@ export default function AdminPage() {
                     );
                   })}
                 </div>
-              )}
+              );
+              })()}
             </div>
           )}
 

@@ -322,24 +322,33 @@ function StepCategory({ form, setForm, onNext }: { form: FormData; setForm: (f: 
     );
   }
 
+  const POPULAR_SLUGS = ["mobiles", "vehicles", "laptops", "electronics"];
+  const popularCats = CATEGORIES.filter(c => POPULAR_SLUGS.includes(c.slug));
+  const otherCats = CATEGORIES.filter(c => !POPULAR_SLUGS.includes(c.slug));
+
+  const CatButton = ({ slug, label, Icon, color, iconColor }: { slug: string; label: string; Icon: React.ComponentType<{ size: number; strokeWidth: number; style: React.CSSProperties }>; color: string; iconColor: string }) => (
+    <button
+      onClick={() => setPickedCat(slug)}
+      className="w-full flex items-center gap-4 text-left transition-colors hover:bg-[var(--bg)]"
+      style={{ padding: "13px 0", borderBottom: "1px solid var(--border)", background: "none", border: "none" }}
+    >
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: color }}>
+        <Icon size={20} strokeWidth={1.75} style={{ color: iconColor }} />
+      </div>
+      <span className="flex-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>{label}</span>
+      <ChevronRight size={16} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
+    </button>
+  );
+
   return (
     <div>
-      <h2 className="text-lg font-bold text-[var(--text-primary)] mb-1">Choose Category</h2>
-      <p className="text-sm text-[var(--text-muted)] mb-5">What are you selling?</p>
-      <div className="grid grid-cols-3 gap-3">
-        {CATEGORIES.map(({ slug, label, Icon, color, iconColor }) => (
-          <button
-            key={slug}
-            onClick={() => setPickedCat(slug)}
-            className="card p-4 flex flex-col items-center gap-2 transition-all hover:border-[var(--brand-green)]"
-            style={{ minHeight: 80 }}
-          >
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: color }}>
-              <Icon size={22} strokeWidth={1.75} style={{ color: iconColor }} />
-            </div>
-            <span className="text-xs font-medium text-[var(--text-secondary)] text-center leading-tight">{label}</span>
-          </button>
-        ))}
+      <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--brand-green)" }}>Popular</p>
+      <div className="mb-5">
+        {popularCats.map(c => <CatButton key={c.slug} slug={c.slug} label={c.label} Icon={c.Icon} color={c.color} iconColor={c.iconColor} />)}
+      </div>
+      <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>All Categories</p>
+      <div>
+        {otherCats.map(c => <CatButton key={c.slug} slug={c.slug} label={c.label} Icon={c.Icon} color={c.color} iconColor={c.iconColor} />)}
       </div>
     </div>
   );

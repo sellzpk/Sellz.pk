@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Search, Plus, MessageCircle, User } from "lucide-react";
+import { Home, LayoutList, Plus, MessageCircle, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { AuthModal } from "./AuthModal";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -12,7 +12,6 @@ export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [cnicVerified, setCnicVerified] = useState(false);
   const [citySet, setCitySet] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
 
@@ -21,8 +20,7 @@ export function BottomNav() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
       if (user) {
-        supabase.from("users").select("cnic_verified, city").eq("id", user.id).single().then(({ data }) => {
-          setCnicVerified(data?.cnic_verified ?? false);
+        supabase.from("users").select("city").eq("id", user.id).single().then(({ data }) => {
           setCitySet(!!data?.city);
         });
       }
@@ -40,10 +38,10 @@ export function BottomNav() {
   }
 
   const links = [
-    { href: "/", icon: Home, label: "Home" },
-    { href: "/search", icon: Search, label: "Search" },
-    { href: "/chats", icon: MessageCircle, label: "Chats" },
-    { href: user ? "/profile/me" : "/auth/login", icon: User, label: "Profile" },
+    { href: "/",                                    icon: Home,          label: "Home" },
+    { href: user ? "/my-ads" : "/auth/login",       icon: LayoutList,    label: "My Ads" },
+    { href: "/chats",                               icon: MessageCircle, label: "Chats" },
+    { href: user ? "/profile/me" : "/auth/login",   icon: User,          label: "Profile" },
   ];
 
   return (
@@ -53,12 +51,12 @@ export function BottomNav() {
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex items-center h-14">
-          {/* Home + Search */}
+          {/* Home + My Ads */}
           {links.slice(0, 2).map(item => {
-            const active = pathname === item.href;
+            const active = pathname === item.href || (item.label === "My Ads" && pathname.startsWith("/my-ads"));
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
                 className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors"
                 style={{ color: active ? "var(--brand-green)" : "var(--text-muted)" }}
@@ -69,21 +67,24 @@ export function BottomNav() {
             );
           })}
 
-          {/* Post button — center, raised */}
-          <div className="flex-1 flex items-center justify-center" style={{ marginTop: -16 }}>
+          {/* Sell button — center, raised */}
+          <div className="flex-1 flex flex-col items-center justify-center" style={{ gap: 3 }}>
             <button
               onClick={handlePost}
-              aria-label="Post Ad"
-              className="flex items-center justify-center rounded-full shadow-lg transition-transform active:scale-95"
+              aria-label="Sell"
+              className="flex items-center justify-center rounded-full transition-transform active:scale-95"
               style={{
                 width: 52,
                 height: 52,
-                background: "var(--brand-green)",
+                background: "linear-gradient(135deg, #1D9E75, #157A5A)",
                 border: "3px solid #fff",
+                boxShadow: "0 4px 12px rgba(29,158,117,0.4)",
+                marginTop: -20,
               }}
             >
-              <Plus size={24} strokeWidth={2.5} className="text-white" />
+              <Plus size={24} strokeWidth={2.5} color="white" />
             </button>
+            <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>Sell</span>
           </div>
 
           {/* Chats + Profile */}

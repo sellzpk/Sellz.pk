@@ -9,24 +9,32 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: ads, error } = await supabaseAdmin
+  const status = req.nextUrl.searchParams.get("status") ?? "pending";
+  const validStatuses = ["pending", "active", "rejected", "sold", "all"];
+  if (!validStatuses.includes(status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = supabaseAdmin
     .from("ads")
-    .select("id, title, price, city, created_at, ownership_proof_url, seller_id, edit_count, edited_at")
-    .eq("status", "pending")
-    .order("created_at", { ascending: true });
+    .select("id, title, price, city, status, rejection_reason, created_at, ownership_proof_url, seller_id, edit_count, edited_at")
+    .order("created_at", { ascending: status === "pending" });
+
+  if (status !== "all") query = query.eq("status", status);
+
+  const { data: ads, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!ads || ads.length === 0) return NextResponse.json([]);
 
-  // Fetch photos separately
-  const adIds = ads.map(a => a.id);
+  const adIds = ads.map((a: { id: number }) => a.id);
   const { data: photos } = await supabaseAdmin
     .from("ad_photos")
     .select("ad_id, url, order_index")
     .in("ad_id", adIds);
 
-  // Fetch seller info separately
-  const sellerIds = [...new Set(ads.map(a => a.seller_id))];
+  const sellerIds = [...new Set(ads.map((a: { seller_id: string }) => a.seller_id))];
   const { data: sellers } = await supabaseAdmin
     .from("users")
     .select("id, full_name, cnic_verified")
@@ -39,7 +47,7 @@ export async function GET(req: NextRequest) {
     photosMap[p.ad_id].push({ url: p.url, order_index: p.order_index });
   }
 
-  const result = ads.map(ad => ({
+  const result = ads.map((ad: { id: number; seller_id: string }) => ({
     ...ad,
     ad_photos: photosMap[ad.id] ?? [],
     users: sellerMap[ad.seller_id] ?? null,
