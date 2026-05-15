@@ -144,39 +144,25 @@ export default function EditAdPage() {
     try {
       const supabase = createClient();
 
-      // Use raw POST + X-HTTP-Method-Override: PATCH to bypass iOS Safari PATCH failure
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Session expired — sign in again");
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/ads?id=eq.${Number(id)}&seller_id=eq.${encodeURIComponent(userId)}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            "Authorization": `Bearer ${session.access_token}`,
-            "X-HTTP-Method-Override": "PATCH",
-            "Prefer": "return=minimal",
-          },
-          body: JSON.stringify({
-            title: form.title.trim(),
-            description: form.description || null,
-            price: Number(form.price),
-            condition: form.condition,
-            area: form.area || null,
-            details: Object.keys(form.details).length > 0 ? form.details : null,
-            status: "pending",
-            rejection_reason: null,
-            edited_at: new Date().toISOString(),
-            edit_count: (ad?.edit_count ?? 0) + 1,
-          }),
-        }
-      );
+      // POST to same-origin API route — avoids iOS Safari PATCH/external-fetch failures
+      const res = await fetch("/api/update-ad", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: Number(id),
+          title: form.title.trim(),
+          description: form.description || null,
+          price: Number(form.price),
+          condition: form.condition,
+          area: form.area || null,
+          details: Object.keys(form.details).length > 0 ? form.details : null,
+          edit_count: (ad?.edit_count ?? 0) + 1,
+        }),
+      });
 
       if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`Save failed (${res.status}): ${errText}`);
+        const body = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(body.error ?? `Save failed (${res.status})`);
       }
 
       if (removedPhotoIds.length > 0) {
