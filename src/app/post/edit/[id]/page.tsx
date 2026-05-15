@@ -140,54 +140,65 @@ export default function EditAdPage() {
     if (totalPhotos < 2) return setSubmitError("Minimum 2 photos required");
 
     setSubmitting(true);
-    const supabase = createClient();
 
-    const { error: updateError } = await supabase
-      .from("ads")
-      .update({
-        title: form.title.trim(),
-        description: form.description || null,
-        price: Number(form.price),
-        condition: form.condition,
-        area: form.area || null,
-        details: Object.keys(form.details).length > 0 ? form.details : null,
-        status: "pending",
+    try {
+      const supabase = createClient();
+
+      // Core update — only columns guaranteed to exist
+      const { error: updateError } = await supabase
+        .from("ads")
+        .update({
+          title: form.title.trim(),
+          description: form.description || null,
+          price: Number(form.price),
+          condition: form.condition,
+          area: form.area || null,
+          details: Object.keys(form.details).length > 0 ? form.details : null,
+          status: "pending",
+        })
+        .eq("id", Number(id))
+        .eq("seller_id", userId);
+
+      if (updateError) throw new Error(updateError.message);
+
+      // Non-critical meta fields — fire-and-forget so missing columns don't block save
+      void supabase.from("ads").update({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         rejection_reason: null as any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         edited_at: new Date().toISOString() as any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         edit_count: ((ad?.edit_count ?? 0) + 1) as any,
-      })
-      .eq("id", Number(id))
-      .eq("seller_id", userId);
+      }).eq("id", Number(id));
 
-    if (updateError) { setSubmitError(updateError.message); setSubmitting(false); return; }
-
-    if (removedPhotoIds.length > 0) {
-      await supabase.from("ad_photos").delete().in("id", removedPhotoIds);
-    }
-
-    for (let i = 0; i < newPhotoFiles.length; i++) {
-      setUploadProgress(`Uploading photo ${i + 1} of ${newPhotoFiles.length}…`);
-      const file = newPhotoFiles[i];
-      const path = `${userId}/${id}_edit_${Date.now()}_${i}.jpg`;
-      if (file.size > 10 * 1024 * 1024) { setSubmitError(`Photo ${i + 1} is too large — max 10MB`); setSubmitting(false); setUploadProgress(""); return; }
-      const buf = await file.arrayBuffer();
-      const { error: upErr } = await supabase.storage.from("ad-photos").upload(path, buf, { contentType: "image/jpeg", upsert: true });
-      if (upErr) {
-        setSubmitError(`Failed to upload photo ${i + 1}: ${upErr.message}`);
-        setSubmitting(false);
-        setUploadProgress("");
-        return;
+      if (removedPhotoIds.length > 0) {
+        await supabase.from("ad_photos").delete().in("id", removedPhotoIds);
       }
-      const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
-      await supabase.from("ad_photos").insert({ ad_id: Number(id), url: urlData.publicUrl, order_index: existingPhotos.length + i });
-    }
 
-    setUploadProgress("");
-    setSubmitting(false);
-    router.push("/my-ads?updated=true");
+      for (let i = 0; i < newPhotoFiles.length; i++) {
+        setUploadProgress(`Uploading photo ${i + 1} of ${newPhotoFiles.length}…`);
+        const file = newPhotoFiles[i];
+        const path = `${userId}/${id}_edit_${Date.now()}_${i}.jpg`;
+        if (file.size > 10 * 1024 * 1024) throw new Error(`Photo ${i + 1} is too large — max 10MB`);
+        const buf = await new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as ArrayBuffer);
+          reader.onerror = () => reject(new Error("Failed to read photo"));
+          reader.readAsArrayBuffer(file);
+        });
+        const { error: upErr } = await supabase.storage.from("ad-photos").upload(path, buf, { contentType: "image/jpeg", upsert: true });
+        if (upErr) throw new Error(`Failed to upload photo ${i + 1}: ${upErr.message}`);
+        const { data: urlData } = supabase.storage.from("ad-photos").getPublicUrl(path);
+        await supabase.from("ad_photos").insert({ ad_id: Number(id), url: urlData.publicUrl, order_index: existingPhotos.length + i });
+      }
+
+      router.push("/my-ads?updated=true");
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : "Save failed — please try again");
+    } finally {
+      setSubmitting(false);
+      setUploadProgress("");
+    }
   }
 
   if (loading) {
