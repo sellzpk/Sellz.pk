@@ -144,32 +144,40 @@ export default function EditAdPage() {
     try {
       const supabase = createClient();
 
-      // Core update — only columns guaranteed to exist
-      const { error: updateError } = await supabase
-        .from("ads")
-        .update({
-          title: form.title.trim(),
-          description: form.description || null,
-          price: Number(form.price),
-          condition: form.condition,
-          area: form.area || null,
-          details: Object.keys(form.details).length > 0 ? form.details : null,
-          status: "pending",
-        })
-        .eq("id", Number(id))
-        .eq("seller_id", userId);
+      // Use raw POST + X-HTTP-Method-Override: PATCH to bypass iOS Safari PATCH failure
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Session expired — sign in again");
 
-      if (updateError) throw new Error(updateError.message);
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/ads?id=eq.${Number(id)}&seller_id=eq.${encodeURIComponent(userId)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            "Authorization": `Bearer ${session.access_token}`,
+            "X-HTTP-Method-Override": "PATCH",
+            "Prefer": "return=minimal",
+          },
+          body: JSON.stringify({
+            title: form.title.trim(),
+            description: form.description || null,
+            price: Number(form.price),
+            condition: form.condition,
+            area: form.area || null,
+            details: Object.keys(form.details).length > 0 ? form.details : null,
+            status: "pending",
+            rejection_reason: null,
+            edited_at: new Date().toISOString(),
+            edit_count: (ad?.edit_count ?? 0) + 1,
+          }),
+        }
+      );
 
-      // Non-critical meta fields — fire-and-forget so missing columns don't block save
-      void supabase.from("ads").update({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        rejection_reason: null as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        edited_at: new Date().toISOString() as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        edit_count: ((ad?.edit_count ?? 0) + 1) as any,
-      }).eq("id", Number(id));
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Save failed (${res.status}): ${errText}`);
+      }
 
       if (removedPhotoIds.length > 0) {
         await supabase.from("ad_photos").delete().in("id", removedPhotoIds);
