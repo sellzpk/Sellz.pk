@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BadgeVerified } from "./BadgeVerified";
+import { FavoriteButton } from "./FavoriteButton";
 import { MapPin, Clock, ImageOff } from "lucide-react";
 
 export interface Ad {
@@ -17,6 +18,7 @@ export interface Ad {
   owned: boolean;
   category: string;
   whatsapp?: string;
+  isFavorited?: boolean;
 }
 
 function formatPrice(p: number) {
@@ -46,22 +48,23 @@ export function AdCard({ ad }: AdCardProps) {
               <ImageOff size={32} strokeWidth={1.5} style={{ color: "#BABAB5" }} />
             </div>
           )}
-          {/* Badges — top-left, stacked vertically */}
+          {/* Badges — top-left */}
           {(ad.verified || ad.owned) && (
             <div className="absolute flex flex-col gap-1" style={{ top: 10, left: 10 }}>
               {ad.verified && <BadgeVerified type="verified" />}
               {ad.owned && <BadgeVerified type="owned" />}
             </div>
           )}
+          {/* Heart — top-right */}
+          <FavoriteButton adId={Number(ad.id)} initialFavorited={ad.isFavorited ?? false} size="small" />
         </div>
 
-        {/* Body — flex-1 so all cards stretch equally */}
+        {/* Body */}
         <div className="flex flex-col flex-1 p-3">
           <p className="price mb-1">{formatPrice(ad.price)}</p>
           <p className="text-sm font-medium leading-snug line-clamp-2 flex-1 mb-2" style={{ color: "var(--text-primary)" }}>
             {ad.title}
           </p>
-          {/* Footer row */}
           <div className="flex items-center justify-between gap-2 mt-auto">
             <div className="flex items-center gap-1 text-[11px] text-[var(--text-muted)] min-w-0">
               <MapPin size={11} strokeWidth={2} className="flex-shrink-0" />

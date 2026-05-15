@@ -10,7 +10,7 @@ import { BadgeVerified } from "@/components/BadgeVerified";
 import {
   ShieldCheck, Clock, ShieldOff, Edit2, Check, X,
   MapPin, Calendar, Loader2, ArrowLeft, LogOut,
-  Pencil, Trash2, CheckCheck,
+  Pencil, Trash2, CheckCheck, Heart, ChevronRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRow } from "@/lib/types";
@@ -422,6 +422,19 @@ export default function MyProfilePage() {
               </div>
             )}
           </section>
+
+          {/* Saved Ads */}
+          <Link
+            href="/favorites"
+            className="flex items-center justify-between p-4 rounded-xl border"
+            style={{ background: "white", borderColor: "var(--border)", textDecoration: "none", color: "var(--text-primary)" }}
+          >
+            <div className="flex items-center gap-3">
+              <Heart size={20} color="#EF4444" />
+              <span style={{ fontSize: 15 }}>Saved Ads</span>
+            </div>
+            <ChevronRight size={18} color="#999" />
+          </Link>
 
           {/* Sign out */}
           <div className="pt-2 pb-4">

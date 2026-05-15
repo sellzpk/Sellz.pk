@@ -8,6 +8,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { BadgeVerified } from "@/components/BadgeVerified";
 import { AdCard } from "@/components/AdCard";
 import { ChatPanel } from "@/components/ChatPanel";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { Footer, FooterMobile } from "@/components/Footer";
 import { createClient } from "@/lib/supabase/client";
 import type { AdWithPhotos } from "@/lib/types";
@@ -58,15 +59,42 @@ export default function AdDetailPage() {
   const [chatStarted, setChatStarted] = useState(false);
   const [numberRevealed, setNumberRevealed] = useState(false);
   const [touchStart, setTouchStart] = useState(0);
+  const [isFavorited, setIsFavorited] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     loadAd(Number(id));
   }, [id]);
 
+  async function trackView(adId: number, sellerId: string) {
+    const sessionKey = `viewed_${adId}`;
+    if (sessionStorage.getItem(sessionKey)) return;
+    sessionStorage.setItem(sessionKey, "1");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id === sellerId) return;
+    await fetch("/api/ads/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adId, type: "view", viewerId: user?.id ?? null }),
+    });
+  }
+
+  async function trackClick(adId: number, sellerId: string, type: "whatsapp" | "message" | "phone") {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id === sellerId) return;
+    fetch("/api/ads/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adId, type: `click_${type}`, clickerId: user?.id ?? null }),
+    });
+  }
+
   async function loadAd(adId: number) {
     setLoading(true);
     const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
     const { data } = await supabase
       .from("ads")
       .select("*, ad_photos(*), users(id, full_name, city, cnic_verified, whatsapp_number)")
@@ -75,6 +103,18 @@ export default function AdDetailPage() {
 
     if (data) {
       setAd(data as AdWithPhotos);
+      // Track view (fire-and-forget)
+      trackView(adId, (data as AdWithPhotos).seller_id);
+      // Check if user favorited this ad
+      if (user) {
+        const { data: fav } = await supabase
+          .from("favorites")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("ad_id", adId)
+          .maybeSingle();
+        setIsFavorited(!!fav);
+      }
       const { data: simData } = await supabase
         .from("ads")
         .select("id, title, price, city, area, category, created_at, ad_photos(url)")
@@ -223,6 +263,10 @@ export default function AdDetailPage() {
                     >
                       <Share2 size={15} strokeWidth={2} />
                     </button>
+                  </div>
+                  {/* Favorite — top right of image */}
+                  <div style={{ position: "absolute", top: 12, right: 12 }} onClick={e => e.stopPropagation()}>
+                    <FavoriteButton adId={ad.id} initialFavorited={isFavorited} size="small" />
                   </div>
                 </div>
 
@@ -464,7 +508,7 @@ export default function AdDetailPage() {
         ) : (
           <>
             <button
-              onClick={() => setChatOpen(true)}
+              onClick={() => { setChatOpen(true); trackClick(ad.id, ad.seller_id, "message"); }}
               className="btn-primary justify-center flex-1"
               style={{ padding: "13px 16px", borderRadius: 10, fontSize: 15 }}
             >
@@ -477,6 +521,7 @@ export default function AdDetailPage() {
                   href={`https://wa.me/92${waNumber.replace(/^0/, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackClick(ad.id, ad.seller_id, "whatsapp")}
                   className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
                   style={{ flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", background: "var(--brand-green-light)", textDecoration: "none" }}
                 >
@@ -484,7 +529,7 @@ export default function AdDetailPage() {
                 </a>
               ) : (
                 <button
-                  onClick={handleViewNumber}
+                  onClick={() => { handleViewNumber(); if (chatStarted) trackClick(ad.id, ad.seller_id, "phone"); }}
                   className="flex items-center justify-center gap-1.5 rounded-xl border font-medium text-sm"
                   style={chatStarted
                     ? { flex: "0 0 38%", borderColor: "var(--brand-green)", color: "var(--brand-green)", cursor: "pointer" }

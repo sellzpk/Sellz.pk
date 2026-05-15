@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, CheckCheck, RefreshCw, ImageOff, ArrowLeft } from "lucide-react";
+import { Pencil, Trash2, CheckCheck, RefreshCw, ImageOff, ArrowLeft, BarChart2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BottomNav } from "@/components/BottomNav";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -58,6 +58,13 @@ const EMPTY: Record<TabKey, { icon: string; title: string; desc: string }> = {
   sold:     { icon: "🎉", title: "No sold items yet", desc: "Mark your ads as sold when items are sold" },
 };
 
+type AnalyticsData = {
+  totals: { views: number; clicks: number; favorites: number };
+  period_views: { date: string; count: number }[];
+  clicks_breakdown: { whatsapp: number; message: number; phone: number };
+  conversion_rate: string;
+};
+
 export default function MyAdsPage() {
   const router = useRouter();
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -66,6 +73,10 @@ export default function MyAdsPage() {
   const [counts, setCounts] = useState<Counts>({ all: 0, active: 0, pending: 0, rejected: 0, sold: 0 });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
+  const [analyticsAdId, setAnalyticsAdId] = useState<number | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState("7");
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -117,6 +128,16 @@ export default function MyAdsPage() {
       fetchCounts(user.id);
     }
   }, [user, activeTab, fetchAds, fetchCounts]);
+
+  useEffect(() => {
+    if (!analyticsAdId) return;
+    setAnalyticsLoading(true);
+    setAnalyticsData(null);
+    fetch(`/api/ads/${analyticsAdId}/analytics?period=${analyticsPeriod}`)
+      .then(r => r.json())
+      .then(d => { setAnalyticsData(d); setAnalyticsLoading(false); })
+      .catch(() => setAnalyticsLoading(false));
+  }, [analyticsAdId, analyticsPeriod]);
 
   async function handleMarkSold(adId: number) {
     if (!user || !confirm("Mark as sold? The ad will be removed from listings.")) return;
@@ -277,6 +298,11 @@ export default function MyAdsPage() {
                       </button>
                     )}
                     {ad.status === "active" && (
+                      <button onClick={() => { setAnalyticsAdId(ad.id); setAnalyticsPeriod("7"); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "8px 14px", background: "#F0F8FF", border: "1px solid #185FA5", borderRadius: 8, fontSize: 13, cursor: "pointer", color: "#185FA5" }}>
+                        <BarChart2 size={13} /> Analytics
+                      </button>
+                    )}
+                    {ad.status === "active" && (
                       <button onClick={() => handleMarkSold(ad.id)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "8px 14px", background: "#F0F0FF", border: "1px solid #6366F1", borderRadius: 8, fontSize: 13, cursor: "pointer", color: "#6366F1" }}>
                         <CheckCheck size={13} /> Mark as Sold
                       </button>
@@ -296,6 +322,117 @@ export default function MyAdsPage() {
           </div>
         )}
       </div>
+
+      {/* Analytics bottom sheet */}
+      {analyticsAdId && (
+        <>
+          <div
+            onClick={() => setAnalyticsAdId(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }}
+          />
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderRadius: "20px 20px 0 0", zIndex: 50, maxHeight: "90dvh", overflowY: "auto", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+            {/* Sheet header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 16px 12px", borderBottom: "1px solid #F0F0EE", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#1A1A1A" }}>Ad Analytics</h3>
+              </div>
+              <button onClick={() => setAnalyticsAdId(null)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+                <X size={20} color="#666" />
+              </button>
+            </div>
+
+            <div style={{ padding: 16 }}>
+              {/* Period selector */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {[{ label: "7 days", value: "7" }, { label: "30 days", value: "30" }, { label: "All time", value: "365" }].map(p => (
+                  <button
+                    key={p.value}
+                    onClick={() => setAnalyticsPeriod(p.value)}
+                    style={{ padding: "6px 14px", borderRadius: 20, cursor: "pointer", fontSize: 13, background: analyticsPeriod === p.value ? "#1D9E75" : "white", color: analyticsPeriod === p.value ? "white" : "#666", border: `1px solid ${analyticsPeriod === p.value ? "#1D9E75" : "#E0E0E0"}` }}
+                  >{p.label}</button>
+                ))}
+              </div>
+
+              {analyticsLoading || !analyticsData ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>Loading...</div>
+              ) : (
+                <>
+                  {/* Stat cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+                    {[
+                      { icon: "👁", label: "Views", value: analyticsData.totals.views, color: "#1D9E75" },
+                      { icon: "👆", label: "Clicks", value: analyticsData.totals.clicks, color: "#185FA5" },
+                      { icon: "❤️", label: "Saves", value: analyticsData.totals.favorites, color: "#EF4444" },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: "white", border: "1px solid #E8E8E4", borderRadius: 10, padding: "14px 12px", textAlign: "center" }}>
+                        <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value.toLocaleString()}</div>
+                        <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Conversion rate */}
+                  <div style={{ background: "#F0FAF6", border: "1px solid #1D9E75", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 13, color: "#666" }}>Conversion Rate</div>
+                      <div style={{ fontSize: 11, color: "#999" }}>Clicked after viewing</div>
+                    </div>
+                    <div style={{ fontSize: 26, fontWeight: 700, color: "#1D9E75" }}>{analyticsData.conversion_rate}%</div>
+                  </div>
+
+                  {/* Views chart */}
+                  <div style={{ marginBottom: 20 }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: "#1A1A1A" }}>Views over time</h4>
+                    {analyticsData.period_views.length === 0 ? (
+                      <p style={{ color: "#999", fontSize: 13 }}>No views in this period yet</p>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}>
+                        {analyticsData.period_views.map(d => {
+                          const max = Math.max(...analyticsData.period_views.map(x => x.count));
+                          const h = max > 0 ? (d.count / max) * 80 : 0;
+                          return (
+                            <div key={d.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                              <div style={{ fontSize: 10, color: "#666" }}>{d.count}</div>
+                              <div style={{ width: "100%", background: "#1D9E75", borderRadius: "3px 3px 0 0", height: Math.max(h, 4) }} />
+                              <div style={{ fontSize: 9, color: "#999", textAlign: "center" }}>{d.date}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Clicks breakdown */}
+                  <div>
+                    <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: "#1A1A1A" }}>Contact clicks</h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {[
+                        { key: "message" as const, label: "💬 In-app message", color: "#1D9E75" },
+                        { key: "whatsapp" as const, label: "📱 WhatsApp", color: "#25D366" },
+                        { key: "phone" as const, label: "📞 Phone number", color: "#185FA5" },
+                      ].map(item => {
+                        const count = analyticsData.clicks_breakdown[item.key] ?? 0;
+                        const total = Object.values(analyticsData.clicks_breakdown).reduce((a, b) => a + b, 0);
+                        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                        return (
+                          <div key={item.key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: 13, flex: 1 }}>{item.label}</span>
+                            <div style={{ width: 80, height: 6, background: "#F0F0EE", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: item.color, borderRadius: 3 }} />
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 600, width: 24, textAlign: "right", color: "#1A1A1A" }}>{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <BottomNav />
     </div>
