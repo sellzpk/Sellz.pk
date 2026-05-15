@@ -151,7 +151,7 @@ export default function ChatsPage() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto pb-20">
+        <main className="flex-1 overflow-y-auto pb-24">
           <div className="max-w-2xl mx-auto px-4 py-4 space-y-3">
             <div className="text-center">
               <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full" style={{ background: "#FFF8E1", color: "#92400E" }}>

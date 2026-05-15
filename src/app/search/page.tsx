@@ -269,7 +269,7 @@ function SearchContent() {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 pb-24">
           {/* Results header */}
           <div className="flex items-center justify-between mb-4">
             <div>

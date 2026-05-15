@@ -455,7 +455,7 @@ export default function AdDetailPage() {
       </main>
 
       {/* Mobile sticky bottom bar */}
-      <div className="md:hidden fixed left-0 right-0 bg-white border-t border-[var(--border)] px-4 py-3 z-20 flex gap-2" style={{ bottom: 56, paddingBottom: "calc(12px + env(safe-area-inset-bottom))" }}>
+      <div className="md:hidden fixed left-0 right-0 bg-white border-t border-[var(--border)] px-4 py-3 z-20 flex gap-2" style={{ bottom: "calc(56px + env(safe-area-inset-bottom, 0px))", paddingBottom: "12px" }}>
         {ad.status === "sold" ? (
           <div className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3" style={{ background: "#FEF2F2", border: "1px solid #FECACA" }}>
             <span style={{ fontSize: 16 }}>🎉</span>
