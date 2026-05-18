@@ -115,9 +115,12 @@ export default function MyProfilePage() {
   async function handleDelete(adId: number) {
     if (!confirm("Delete this ad? This cannot be undone.")) return;
     setActioning(`del-${adId}`);
-    const supabase = createClient();
-    await supabase.from("ad_photos").delete().eq("ad_id", adId);
-    await supabase.from("ads").delete().eq("id", adId).eq("seller_id", userId);
+    const res = await fetch("/api/delete-ad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adId }),
+    });
+    if (!res.ok) { alert("Delete failed — please try again"); setActioning(null); return; }
     setAds(prev => prev.filter(a => a.id !== adId));
     setActioning(null);
   }
