@@ -203,8 +203,8 @@ export default function AdDetailPage() {
         </div>
 
         {/* Main grid */}
-        <div className="max-w-6xl mx-auto px-0 md:px-8" style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}>
-          <div className="md:grid" style={{ gridTemplateColumns: "1fr 360px", gap: 24, display: "inherit" }}>
+        <div className="max-w-6xl mx-auto px-0 md:px-8 flex flex-col gap-6">
+          <div className="md:grid" style={{ gridTemplateColumns: "1fr 360px", gap: 24 }}>
 
             {/* LEFT: photos + info */}
             <div>
