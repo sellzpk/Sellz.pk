@@ -10,7 +10,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.sellz.pk"),
   title: {
-    default: "Sellz.pk — Pakistan's Verified Buy & Sell Marketplace",
+    default: "Sellz.pk — Verified Classifieds Marketplace in Pakistan",
     template: "%s | Sellz.pk",
   },
   description: "Buy and sell safely in Pakistan. CNIC-verified sellers, ownership proof, and secure messaging. Mobiles, laptops, cars, property and more.",
