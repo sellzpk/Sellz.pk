@@ -1,0 +1,36 @@
+# Sellz.pk — Pakistan's Verified Classifieds Marketplace
+
+## What is Sellz.pk?
+
+Sellz.pk is Pakistan's first CNIC-verified peer-to-peer classifieds marketplace. Every seller is verified with their national identity card (CNIC), meaning one real person per account. No fake listings, no anonymous sellers, no paid bumps that hide better deals.
+
+## What makes Sellz.pk different
+
+- **CNIC verification**: Every seller's identity confirmed before they can post. One CNIC = one account.
+- **No paid promotion**: Listings are shown in chronological order. No one can pay to appear above better deals.
+- **Camera-only photos**: All listing photos must be taken live via camera — no stolen images from Google or other sites.
+- **Manual ad approval**: Every listing is reviewed by the Sellz.pk team before going live.
+- **Individual sellers only**: No dealers, no businesses. Only real people selling their own items.
+
+## Categories
+
+Mobile phones, laptops & computers, cars & vehicles, property (rent and sale), home appliances, furniture, fashion & clothing, books & education, sports & fitness, services, and more.
+
+## Geography
+
+Sellz.pk operates across all major cities in Pakistan including Karachi, Lahore, Islamabad, Rawalpindi, Faisalabad, Multan, Peshawar, Quetta, Hyderabad, and others.
+
+## Pages
+
+- Homepage: https://www.sellz.pk
+- Search listings: https://www.sellz.pk/search
+- How it works: https://www.sellz.pk/how-it-works
+- Safety tips: https://www.sellz.pk/safety
+- Post an ad: https://www.sellz.pk/post
+- Blog: https://www.sellz.pk/blog
+- About: https://www.sellz.pk/about
+- Contact: https://www.sellz.pk/contact
+
+## Contact
+
+Email: hello@sellz.pk

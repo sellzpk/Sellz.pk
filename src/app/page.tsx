@@ -66,11 +66,46 @@ export default function HomePage() {
     fetchAds();
   }, [activeCategory, filterCity]);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://www.sellz.pk/#website",
+        "url": "https://www.sellz.pk",
+        "name": "Sellz.pk",
+        "description": "Pakistan's first CNIC-verified classifieds marketplace. Buy and sell with verified sellers — no fake listings.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://www.sellz.pk/search?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://www.sellz.pk/#organization",
+        "name": "Sellz.pk",
+        "url": "https://www.sellz.pk",
+        "description": "Pakistan's verified classifieds marketplace. Every seller verified by CNIC. Buy and sell mobile phones, cars, property, electronics and more.",
+        "foundingLocation": { "@type": "Country", "name": "Pakistan" },
+        "areaServed": { "@type": "Country", "name": "Pakistan" }
+      }
+    ]
+  };
+
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Navbar />
 
       <main className="flex-1 pb-24 md:pb-8">
+        <h1 className="sr-only">Buy &amp; Sell in Pakistan — CNIC-Verified Classifieds on Sellz.pk</h1>
         {/* Mobile hero search */}
         <div className="md:hidden px-4 pt-4 pb-3 bg-white border-b border-[var(--border)]">
           <SearchBar city={filterCity} large />

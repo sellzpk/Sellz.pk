@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /onboarding
+Disallow: /post/edit/
+Disallow: /my-ads
+Disallow: /chats
+Disallow: /profile/me
+Disallow: /favorites
+Disallow: /report
+
+Sitemap: https://www.sellz.pk/sitemap.xml
