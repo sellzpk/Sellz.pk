@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     siteName: "Sellz.pk",
     title: "Sellz.pk — Pakistan's Verified Buy & Sell Marketplace",
     description: "Buy and sell safely in Pakistan. CNIC-verified sellers, ownership proof, and secure messaging.",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Sellz.pk — Verified Marketplace" }],
+    images: [{ url: "/api/og", width: 1200, height: 630, alt: "Sellz.pk — Verified Classifieds Marketplace in Pakistan" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Sellz.pk — Pakistan's Verified Buy & Sell Marketplace",
     description: "Buy and sell safely in Pakistan. CNIC-verified sellers only.",
-    images: ["/og-image.png"],
+    images: ["/api/og"],
   },
   alternates: {
     canonical: "https://www.sellz.pk",

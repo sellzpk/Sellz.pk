@@ -7,6 +7,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date().toISOString();
 
   // Static pages
+  const CATEGORY_SLUGS = [
+    "mobiles", "vehicles", "property", "electronics",
+    "furniture", "fashion", "books-sports", "kids",
+    "services", "animals", "jobs", "other",
+  ];
+
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE,                        lastModified: now, changeFrequency: "daily",   priority: 1.0 },
     { url: `${BASE}/search`,            lastModified: now, changeFrequency: "daily",   priority: 0.9 },
@@ -17,19 +23,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/blog`,              lastModified: now, changeFrequency: "weekly",  priority: 0.7 },
     { url: `${BASE}/terms`,             lastModified: now, changeFrequency: "yearly",  priority: 0.3 },
     { url: `${BASE}/privacy`,           lastModified: now, changeFrequency: "yearly",  priority: 0.3 },
-    // Category search pages
-    { url: `${BASE}/search?category=mobiles`,     lastModified: now, changeFrequency: "daily", priority: 0.8 },
-    { url: `${BASE}/search?category=vehicles`,    lastModified: now, changeFrequency: "daily", priority: 0.8 },
-    { url: `${BASE}/search?category=property`,    lastModified: now, changeFrequency: "daily", priority: 0.8 },
-    { url: `${BASE}/search?category=electronics`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
-    { url: `${BASE}/search?category=laptops`,     lastModified: now, changeFrequency: "daily", priority: 0.8 },
-    { url: `${BASE}/search?category=fashion`,     lastModified: now, changeFrequency: "daily", priority: 0.7 },
-    { url: `${BASE}/search?category=home`,        lastModified: now, changeFrequency: "daily", priority: 0.7 },
-    { url: `${BASE}/search?category=jobs`,        lastModified: now, changeFrequency: "daily", priority: 0.7 },
-    { url: `${BASE}/search?category=services`,    lastModified: now, changeFrequency: "daily", priority: 0.7 },
-    { url: `${BASE}/search?category=sports`,      lastModified: now, changeFrequency: "daily", priority: 0.6 },
-    { url: `${BASE}/search?category=agriculture`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
-    { url: `${BASE}/search?category=books`,       lastModified: now, changeFrequency: "daily", priority: 0.6 },
+    // Category landing pages (SEO-optimised, server-rendered)
+    ...CATEGORY_SLUGS.map(slug => ({
+      url: `${BASE}/${slug}`,
+      lastModified: now,
+      changeFrequency: "daily" as const,
+      priority: 0.85,
+    })),
   ];
 
   // Dynamic ad pages
