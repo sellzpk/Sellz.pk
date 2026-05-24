@@ -26,8 +26,8 @@ const COLUMNS = [
     heading: "Popular Categories",
     links: [
       { label: "Mobile Phones",       href: "/search?category=mobiles" },
-      { label: "Cars",                href: "/search?category=vehicles" },
-      { label: "Motorcycles",         href: "/search?category=vehicles" },
+      { label: "Cars",                href: "/search?category=vehicles&sub=Cars" },
+      { label: "Motorcycles",         href: "/search?category=vehicles&sub=Motorcycles" },
       { label: "Property for Sale",   href: "/search?category=property" },
       { label: "Electronics",         href: "/search?category=electronics" },
       { label: "Furniture",           href: "/search?category=furniture" },
@@ -92,7 +92,7 @@ const TRUST = [
   },
 ];
 
-export function Footer() {
+function DesktopFooter() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   function toggle(i: number) {
@@ -180,7 +180,7 @@ export function Footer() {
         style={{ borderTop: "1px solid #E8E8E4", margin: "32px 32px 0", padding: "16px 0" }}
       >
         <p style={{ fontSize: 12, color: "#999" }}>
-          © 2025 Sellz.pk — Pakistan ka verified marketplace
+          © 2026 Sellz.pk — Pakistan ka verified marketplace
         </p>
         <p className="flex items-center gap-1" style={{ fontSize: 12, color: "#999" }}>
           Made with <Heart size={12} strokeWidth={2} style={{ color: "#e53e3e", fill: "#e53e3e" }} /> in Pakistan
@@ -190,8 +190,8 @@ export function Footer() {
   );
 }
 
-/* ── Mobile footer (separate component rendered below BottomNav padding) ── */
-export function FooterMobile() {
+/* ── Mobile footer ── */
+function MobileFooter() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   function toggle(i: number) {
@@ -278,11 +278,26 @@ export function FooterMobile() {
         className="flex flex-col gap-1 items-center text-center"
         style={{ borderTop: "1px solid #E8E8E4", padding: "16px 20px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}
       >
-        <p style={{ fontSize: 12, color: "#999" }}>© 2025 Sellz.pk — Pakistan ka verified marketplace</p>
+        <p style={{ fontSize: 12, color: "#999" }}>© 2026 Sellz.pk — Pakistan ka verified marketplace</p>
         <p className="flex items-center gap-1" style={{ fontSize: 12, color: "#999" }}>
           Made with <Heart size={11} strokeWidth={2} style={{ color: "#e53e3e", fill: "#e53e3e" }} /> in Pakistan
         </p>
       </div>
     </div>
   );
+}
+
+/* ── Unified exports ── */
+export function Footer() {
+  return (
+    <>
+      <DesktopFooter />
+      <MobileFooter />
+    </>
+  );
+}
+
+/** @deprecated No-op — Footer now renders both desktop and mobile internally */
+export function FooterMobile() {
+  return null;
 }

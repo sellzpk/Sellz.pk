@@ -40,7 +40,7 @@ export function BottomNav() {
   const links = [
     { href: "/",                                    icon: Home,          label: "Home" },
     { href: user ? "/my-ads" : "/auth/login",       icon: LayoutList,    label: "My Ads" },
-    { href: "/chats",                               icon: MessageCircle, label: "Chats" },
+    { href: user ? "/chats" : "/auth/login",         icon: MessageCircle, label: "Chats" },
     { href: user ? "/profile/me" : "/auth/login",   icon: User,          label: "Profile" },
   ];
 

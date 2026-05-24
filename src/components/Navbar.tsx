@@ -119,8 +119,15 @@ export function Navbar() {
     setLocModal(true);
   }
 
+  function clearLocation() {
+    localStorage.removeItem("sellz_location");
+    setSavedLoc(null);
+    window.dispatchEvent(new Event("sellz:location"));
+    setLocModal(false);
+  }
+
   function confirmLocation() {
-    if (!locCity) return;
+    if (!locCity) { clearLocation(); return; }
     const area = locArea && locArea !== "Other" ? locArea : "";
     const display = area ? `${locCity}, ${area}` : locCity;
     const loc = { city: locCity, area, display };
@@ -158,7 +165,7 @@ export function Navbar() {
             style={{ borderColor: "var(--border)", background: "var(--bg)", color: "var(--text-secondary)", fontSize: 12, maxWidth: 100 }}
           >
             <MapPin size={13} strokeWidth={2} style={{ color: "var(--brand-green)", flexShrink: 0 }} />
-            <span className="truncate" style={{ maxWidth: 72 }}>{savedLoc?.city ?? "City"}</span>
+            <span className="truncate" style={{ maxWidth: 72 }}>{savedLoc?.city ?? "All Cities"}</span>
           </button>
 
           {/* Mobile search icon */}
@@ -287,6 +294,19 @@ export function Navbar() {
               <div className="px-4 pb-2">
                 <p className="text-xs font-semibold mb-2 uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>City</p>
                 <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => { setLocCity(""); setLocArea(""); }}
+                    className="col-span-2 flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-colors"
+                    style={{
+                      borderColor: !locCity ? "var(--brand-green)" : "var(--border)",
+                      background: !locCity ? "var(--brand-green-light)" : "var(--bg)",
+                      color: !locCity ? "var(--brand-green)" : "var(--text-secondary)",
+                      fontWeight: !locCity ? 600 : 400,
+                    }}
+                  >
+                    All Pakistan
+                    {!locCity && <Check size={14} strokeWidth={2.5} />}
+                  </button>
                   {CITIES.map(city => (
                     <button
                       key={city}

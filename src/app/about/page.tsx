@@ -72,7 +72,7 @@ export default function AboutPage() {
 
           <div className="card p-5 text-center">
             <p className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Start buying and selling safely</p>
-            <Link href="/auth" className="btn-primary justify-center inline-flex px-6">
+            <Link href="/auth/signup" className="btn-primary justify-center inline-flex px-6">
               Create Account
             </Link>
           </div>

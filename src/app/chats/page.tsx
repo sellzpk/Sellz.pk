@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
 import { Send, ArrowLeft, Flag, MoreVertical, Loader2, Inbox } from "lucide-react";
@@ -34,6 +35,7 @@ function relTime(iso: string) {
 }
 
 export default function ChatsPage() {
+  const router = useRouter();
   const [chats, setChats] = useState<ChatWithMeta[]>([]);
   const [activeChat, setActiveChat] = useState<ChatWithMeta | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -74,7 +76,7 @@ export default function ChatsPage() {
     setLoading(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
+    if (!user) { router.replace("/auth/login"); return; }
     setUserId(user.id);
 
     const { data } = await supabase
