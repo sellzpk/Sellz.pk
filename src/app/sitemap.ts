@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { BLOG_POSTS } from "@/lib/blog";
 
 const BASE = "https://www.sellz.pk";
 
@@ -21,6 +22,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/safety`,            lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${BASE}/contact`,           lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE}/blog`,              lastModified: now, changeFrequency: "weekly",  priority: 0.7 },
+    ...BLOG_POSTS.map(p => ({
+      url: `${BASE}/blog/${p.slug}`,
+      lastModified: p.date,
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
     { url: `${BASE}/terms`,             lastModified: now, changeFrequency: "yearly",  priority: 0.3 },
     { url: `${BASE}/privacy`,           lastModified: now, changeFrequency: "yearly",  priority: 0.3 },
     // Category landing pages (SEO-optimised, server-rendered)

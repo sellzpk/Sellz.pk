@@ -6,9 +6,25 @@ import { BottomNav } from "@/components/BottomNav";
 import { Footer, FooterMobile } from "@/components/Footer";
 import { Shield, Camera, ClipboardCheck, Ban, UserCheck, ArrowLeft } from "lucide-react";
 
+const orgJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://www.sellz.pk/#organization",
+  "name": "Sellz.pk",
+  "url": "https://www.sellz.pk",
+  "description": "Pakistan's first CNIC-verified peer-to-peer classifieds marketplace. Every seller must verify their national identity card. One CNIC, one account — no fake listings, no anonymous sellers, no paid bumps.",
+  "foundingLocation": { "@type": "Country", "name": "Pakistan" },
+  "areaServed": { "@type": "Country", "name": "Pakistan" },
+  "knowsAbout": ["classifieds marketplace", "CNIC verification", "peer-to-peer commerce", "online marketplace Pakistan"],
+};
+
 export default function AboutPage() {
   return (
     <div className="min-h-dvh flex flex-col" style={{ background: "var(--bg)" }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+      />
       <Navbar />
       <main className="flex-1 pb-24 md:pb-8">
         <div className="max-w-2xl mx-auto px-4 py-8">

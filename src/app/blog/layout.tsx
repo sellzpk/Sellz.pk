@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Blog — Tips for Buying & Selling in Pakistan",
-  description: "Expert tips, guides, and advice for buying and selling in Pakistan. Learn how to get the best deals, avoid scams, and sell faster on Sellz.pk.",
+  title: "Blog — Buying & Selling Tips for Pakistan",
+  description: "Guides and tips for safe buying and selling in Pakistan. How to avoid scams, sell your phone, buy a used car, and more — from the Sellz.pk team.",
   alternates: { canonical: "https://www.sellz.pk/blog" },
   openGraph: {
-    title: "Sellz.pk Blog — Pakistan Marketplace Tips & Guides",
-    description: "Buying and selling tips for Pakistanis. Avoid scams, price guides, and how to sell faster.",
+    title: "Sellz.pk Blog — Safe Buying & Selling in Pakistan",
+    description: "Practical guides on avoiding scams, selling your phone safely, buying used cars, and more.",
     url: "https://www.sellz.pk/blog",
   },
 };

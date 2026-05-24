@@ -260,3 +260,11 @@ body {
 }
 .whatsapp-cta:hover { background: #1ebe5a; }
 .whatsapp-cta:active { transform: scale(0.98); }
+
+/* Blog article prose */
+.prose-sellz h2 { font-size: 18px; font-weight: 700; color: #1a1a1a; margin: 28px 0 10px; }
+.prose-sellz h3 { font-size: 15px; font-weight: 600; color: #1a1a1a; margin: 20px 0 8px; }
+.prose-sellz p { margin: 0 0 14px; }
+.prose-sellz ul { padding-left: 20px; margin: 0 0 14px; list-style: disc; }
+.prose-sellz li { margin-bottom: 6px; }
+.prose-sellz strong { color: #1a1a1a; font-weight: 600; }

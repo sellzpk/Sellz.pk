@@ -66,6 +66,29 @@ export default function HomePage() {
     fetchAds();
   }, [activeCategory, filterCity]);
 
+  const HOMEPAGE_FAQS = [
+    {
+      q: "What is Sellz.pk?",
+      a: "Sellz.pk is Pakistan's first CNIC-verified peer-to-peer classifieds marketplace. Every seller must verify their national identity card (CNIC) before they can post a listing. This ensures one real, identifiable person per account — eliminating fake sellers, anonymous scammers, and dealers pretending to be individuals.",
+    },
+    {
+      q: "How does CNIC verification work on Sellz.pk?",
+      a: "When a seller registers, they submit photos of their CNIC (front and back) along with a live selfie. The Sellz.pk team manually reviews and verifies the identity before the account is approved for posting. One CNIC can only be linked to one account — ever.",
+    },
+    {
+      q: "Is Sellz.pk free to use?",
+      a: "Yes. Creating an account, verifying your CNIC, posting ads, and messaging sellers are all completely free. There are no paid listing packages, no premium tiers, and no paid bumps. All listings appear in chronological order regardless of who posted them.",
+    },
+    {
+      q: "Why are listings shown newest first without paid promotion?",
+      a: "Sellz.pk does not allow sellers to pay for better placement. Ads are shown in the order they were posted — newest first, always. This ensures genuine sellers get equal visibility and buyers see the most recent listings without manipulation.",
+    },
+    {
+      q: "Is it safe to buy from sellers on Sellz.pk?",
+      a: "Sellz.pk is significantly safer than anonymous classifieds because every seller is CNIC-verified — their real identity is on file. All listing photos must be taken live with a camera (no stolen images). Every ad is manually reviewed before going live. You should still meet sellers in person and inspect items before paying.",
+    },
+  ];
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -74,26 +97,43 @@ export default function HomePage() {
         "@id": "https://www.sellz.pk/#website",
         "url": "https://www.sellz.pk",
         "name": "Sellz.pk",
-        "description": "Pakistan's first CNIC-verified classifieds marketplace. Buy and sell with verified sellers — no fake listings.",
+        "description": "Pakistan's first CNIC-verified peer-to-peer classifieds marketplace. Buy and sell with verified sellers — no fake listings, no anonymous accounts.",
         "potentialAction": {
           "@type": "SearchAction",
           "target": {
             "@type": "EntryPoint",
             "urlTemplate": "https://www.sellz.pk/search?q={search_term_string}"
           },
-          "query-input": "required name=search_term_string"
-        }
+          "query-input": "required name=search_term_string",
+        },
       },
       {
         "@type": "Organization",
         "@id": "https://www.sellz.pk/#organization",
         "name": "Sellz.pk",
         "url": "https://www.sellz.pk",
-        "description": "Pakistan's verified classifieds marketplace. Every seller verified by CNIC. Buy and sell mobile phones, cars, property, electronics and more.",
+        "description": "Pakistan's first CNIC-verified classifieds marketplace. Every seller verified by national identity card. Buy and sell mobile phones, cars, property, laptops, electronics and more — safely.",
         "foundingLocation": { "@type": "Country", "name": "Pakistan" },
-        "areaServed": { "@type": "Country", "name": "Pakistan" }
-      }
-    ]
+        "areaServed": { "@type": "Country", "name": "Pakistan" },
+        "knowsAbout": [
+          "classifieds marketplace",
+          "peer-to-peer commerce",
+          "CNIC verification",
+          "online marketplace Pakistan",
+          "used mobile phones Pakistan",
+          "used cars Pakistan",
+          "property listings Pakistan",
+        ],
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": HOMEPAGE_FAQS.map((faq) => ({
+          "@type": "Question",
+          "name": faq.q,
+          "acceptedAnswer": { "@type": "Answer", "text": faq.a },
+        })),
+      },
+    ],
   };
 
   return (
@@ -195,6 +235,29 @@ export default function HomePage() {
                 </p>
               </div>
             )}
+          </section>
+
+          {/* FAQ — GEO/AEO */}
+          <section className="mt-10 mb-4">
+            <h2 style={{ fontSize: 16, fontWeight: 500, color: "#1A1A1A", marginBottom: 12 }}>
+              Common Questions
+            </h2>
+            <div className="space-y-2">
+              {HOMEPAGE_FAQS.map((faq) => (
+                <details key={faq.q} className="card p-4 group">
+                  <summary
+                    className="text-sm font-semibold cursor-pointer list-none flex items-center justify-between gap-2"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {faq.q}
+                    <span className="text-lg leading-none flex-shrink-0" style={{ color: "var(--brand-green)" }}>+</span>
+                  </summary>
+                  <p className="text-sm leading-relaxed mt-3" style={{ color: "var(--text-muted)" }}>
+                    {faq.a}
+                  </p>
+                </details>
+              ))}
+            </div>
           </section>
 
           {/* Why Sellz.pk */}
