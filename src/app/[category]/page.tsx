@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { BottomNav } from "@/components/BottomNav";
 import { Footer, FooterMobile } from "@/components/Footer";
 import CategoryAds from "./CategoryAds";
+import { CITY_SEO, CITY_SLUGS } from "@/lib/city-seo";
 
 export const dynamicParams = false;
 
@@ -246,7 +247,7 @@ const CATEGORY_SEO: Record<
   },
 };
 
-const VALID_SLUGS = Object.keys(CATEGORY_SEO);
+const VALID_SLUGS = [...Object.keys(CATEGORY_SEO), ...CITY_SLUGS];
 
 interface Props {
   params: Promise<{ category: string }>;
@@ -258,7 +259,9 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { category } = await params;
-  const seo = CATEGORY_SEO[category];
+  const catSeo = CATEGORY_SEO[category];
+  const citySeo = CITY_SEO[category];
+  const seo = catSeo ?? citySeo;
   if (!seo) return { title: "Not Found", robots: { index: false } };
 
   const ogUrl = `https://www.sellz.pk/api/og?title=${encodeURIComponent(seo.h1)}&sub=${encodeURIComponent("Sellz.pk — Pakistan's Verified Classifieds")}`;
@@ -285,8 +288,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CategoryPage({ params }: Props) {
   const { category } = await params;
-  const seo = CATEGORY_SEO[category];
+  const catSeo = CATEGORY_SEO[category];
+  const citySeo = CITY_SEO[category];
+  const seo = catSeo ?? citySeo;
   if (!seo) notFound();
+
+  const isCity = !catSeo && !!citySeo;
+
+  const pageUrl = `https://www.sellz.pk/${category}`;
+  const breadcrumbLabel = isCity
+    ? (citySeo!.cityName)
+    : (seo.h1.split(" in Pakistan")[0].split("Buy & Sell ")[1] ?? seo.h1);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -294,18 +306,8 @@ export default async function CategoryPage({ params }: Props) {
       {
         "@type": "BreadcrumbList",
         itemListElement: [
-          {
-            "@type": "ListItem",
-            position: 1,
-            name: "Home",
-            item: "https://www.sellz.pk",
-          },
-          {
-            "@type": "ListItem",
-            position: 2,
-            name: seo.h1,
-            item: `https://www.sellz.pk/${category}`,
-          },
+          { "@type": "ListItem", position: 1, name: "Home", item: "https://www.sellz.pk" },
+          { "@type": "ListItem", position: 2, name: seo.h1, item: pageUrl },
         ],
       },
       {
@@ -316,6 +318,18 @@ export default async function CategoryPage({ params }: Props) {
           acceptedAnswer: { "@type": "Answer", text: faq.a },
         })),
       },
+      ...(isCity ? [{
+        "@type": "WebPage",
+        "@id": pageUrl,
+        "name": seo.h1,
+        "description": seo.metaDesc,
+        "url": pageUrl,
+        "areaServed": {
+          "@type": "City",
+          "name": citySeo!.cityName,
+          "containedInPlace": { "@type": "Country", "name": "Pakistan" },
+        },
+      }] : []),
     ],
   };
 
@@ -341,8 +355,7 @@ export default async function CategoryPage({ params }: Props) {
                 </li>
                 <li aria-hidden>/</li>
                 <li aria-current="page" style={{ color: "var(--text-primary)" }}>
-                  {seo.h1.split(" in Pakistan")[0].split("Buy & Sell ")[1] ??
-                    seo.h1}
+                  {breadcrumbLabel}
                 </li>
               </ol>
             </nav>
@@ -375,7 +388,10 @@ export default async function CategoryPage({ params }: Props) {
             >
               Latest Listings
             </h2>
-            <CategoryAds category={category} />
+            <CategoryAds
+              category={isCity ? undefined : category}
+              city={isCity ? citySeo!.cityName : undefined}
+            />
           </section>
 
           {/* FAQ section — GEO/AEO */}

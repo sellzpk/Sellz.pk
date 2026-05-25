@@ -1,6 +1,7 @@
 import { MetadataRoute } from "next";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { BLOG_POSTS } from "@/lib/blog";
+import { CITY_SLUGS } from "@/lib/city-seo";
 
 const BASE = "https://www.sellz.pk";
 
@@ -36,6 +37,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "daily" as const,
       priority: 0.85,
+    })),
+    // City landing pages
+    ...CITY_SLUGS.map(slug => ({
+      url: `${BASE}/${slug}`,
+      lastModified: now,
+      changeFrequency: "daily" as const,
+      priority: 0.8,
     })),
   ];
 

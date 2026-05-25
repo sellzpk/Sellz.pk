@@ -1,3 +1,4 @@
+import React from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -179,7 +180,7 @@ function Post3() {
   );
 }
 
-const POST_CONTENT: Record<string, () => JSX.Element> = {
+const POST_CONTENT: Record<string, () => React.ReactElement> = {
   "how-to-sell-mobile-phone-safely-pakistan": Post1,
   "used-car-buying-guide-pakistan": Post2,
   "how-to-avoid-classifieds-scams-pakistan": Post3,

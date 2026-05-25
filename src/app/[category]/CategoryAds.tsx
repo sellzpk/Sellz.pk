@@ -7,25 +7,27 @@ import { createClient } from "@/lib/supabase/client";
 import { mapAdRow, AD_SELECT } from "@/lib/supabase/helpers";
 import { Loader2, Inbox } from "lucide-react";
 
-export default function CategoryAds({ category }: { category: string }) {
+export default function CategoryAds({ category, city }: { category?: string; city?: string }) {
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const { data, error } = await supabase
+      let query = supabase
         .from("ads")
         .select(AD_SELECT)
-        .eq("status", "active")
-        .eq("category", category)
+        .eq("status", "active");
+      if (category) query = query.eq("category", category);
+      if (city) query = query.eq("city", city);
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .limit(60);
       if (!error && data) setAds(data.map(mapAdRow));
       setLoading(false);
     }
     load();
-  }, [category]);
+  }, [category, city]);
 
   if (loading) {
     return (
@@ -53,7 +55,7 @@ export default function CategoryAds({ category }: { category: string }) {
           No listings yet
         </p>
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Be the first to post in this category
+          {city && !category ? `Be the first to post in ${city}` : "Be the first to post in this category"}
         </p>
       </div>
     );

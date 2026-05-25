@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { BadgeVerified } from "./BadgeVerified";
 import { FavoriteButton } from "./FavoriteButton";
 import { MapPin, Clock, ImageOff } from "lucide-react";
@@ -36,11 +37,12 @@ export function AdCard({ ad }: AdCardProps) {
         {/* Image — fixed 200px */}
         <div className="relative flex-shrink-0" style={{ height: 200, background: "#F5F5F3", borderRadius: "11px 11px 0 0", overflow: "hidden" }}>
           {ad.images[0] && !imgError ? (
-            <img
+            <Image
               src={ad.images[0]}
               alt={ad.title}
-              className="w-full h-full object-cover"
-              loading="lazy"
+              fill
+              className="object-cover"
+              sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
               onError={() => setImgError(true)}
             />
           ) : (
